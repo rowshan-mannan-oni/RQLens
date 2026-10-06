@@ -63,6 +63,10 @@ class Project(TimestampMixin, Base):
     topic: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="new")
     duckdb_path: Mapped[str | None] = mapped_column(String(500))
+    # Research questions the data could answer, suggested by the LLM.
+    rq_suggestions_json: Mapped[Json | None]
+    rq_suggestions_status: Mapped[str | None] = mapped_column(String(16))  # running|done|failed
+    rq_suggestions_error: Mapped[str | None] = mapped_column(Text)
     # When false, only aggregate statistics (no sample values) are sent to the LLM.
     share_samples: Mapped[bool] = mapped_column(default=True, server_default="true")
 
@@ -75,6 +79,13 @@ class ResearchQuestion(TimestampMixin, Base):
     text: Mapped[str] = mapped_column(Text)
     parsed_json: Mapped[Json | None]
     position: Mapped[int] = mapped_column(Integer, default=0)
+    # Column mapping (rq.schemas.Mapping). Kept across re-assessments; cleared when text changes.
+    mapping_json: Mapped[Json | None]
+    # queued | running | done | failed
+    status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued")
+    error: Mapped[str | None] = mapped_column(Text)
+    # Bumped on every edit, so a job started before the edit discards its result.
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class Dataset(TimestampMixin, Base):
@@ -156,7 +167,13 @@ class RQAssessment(TimestampMixin, Base):
     gaps_json: Mapped[Json | None]
     suggested_method: Mapped[str | None] = mapped_column(Text)
     threats_json: Mapped[Json | None]
-    config_version: Mapped[str] = mapped_column(String(64))
+    config_version: Mapped[str] = mapped_column(String(120))
+    explanation: Mapped[str | None] = mapped_column(Text)
+    rewording: Mapped[str | None] = mapped_column(Text)
+    facts_json: Mapped[Json | None]  # neutral measurements shown as evidence
+    grounding_json: Mapped[Json | None]
+    explained_by: Mapped[str | None] = mapped_column(String(16))  # llm | rules
+    problems_json: Mapped[Json | None]  # mapping fixes and failed checks
 
 
 class Insight(TimestampMixin, Base):

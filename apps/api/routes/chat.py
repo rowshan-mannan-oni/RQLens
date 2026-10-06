@@ -18,9 +18,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.agent.context import load_project_context
 from api.agent.loop import Event, Outcome, run_agent
-from api.agent.tools import ColumnInfo, ProjectContext, TableInfo, ToolBox, ToolError
-from api.db.models import Chat, Dataset, DatasetColumn, Message, Project, Query, TableRelationship
+from api.agent.tools import ProjectContext, ToolBox, ToolError
+from api.db.models import Chat, Message, Query
 from api.db.session import get_sessionmaker
 from api.llm.client import LLMClient
 from api.routes.deps import OwnedProject, Queue, Session
@@ -132,7 +133,7 @@ async def ask(
     chat_id: int, body: QuestionIn, project: OwnedProject, session: Session, queue: Queue
 ) -> StreamingResponse:
     chat = await _owned_chat(chat_id, project.id, session)
-    ctx = await _project_context(session, project)
+    ctx = await load_project_context(session, project)
     if not ctx.tables:
         raise HTTPException(status.HTTP_409_CONFLICT, "Upload a dataset before asking questions")
 
@@ -281,56 +282,4 @@ def _message_out(m: Message, queries: list[QueryOut]) -> MessageOut:
         grounding=trace.get("grounding"),
         usage=trace.get("usage"),
         stopped=trace.get("stopped"),
-    )
-
-
-async def _project_context(session: AsyncSession, project: Project) -> ProjectContext:
-    datasets = (
-        await session.scalars(
-            select(Dataset)
-            .where(Dataset.project_id == project.id, Dataset.status == "ready")
-            .order_by(Dataset.id)
-        )
-    ).all()
-    by_id = {d.id: d for d in datasets}
-    columns: dict[int, list[ColumnInfo]] = {}
-    if datasets:
-        for c in await session.scalars(
-            select(DatasetColumn)
-            .where(DatasetColumn.dataset_id.in_(by_id))
-            .order_by(DatasetColumn.id)
-        ):
-            columns.setdefault(c.dataset_id, []).append(
-                ColumnInfo(
-                    name=c.name,
-                    label=c.original_name,
-                    physical_type=c.physical_type,
-                    semantic_type=c.semantic_type,
-                    description=c.description,
-                    description_source=c.description_source,
-                    confidence=c.description_confidence,
-                    is_pii=c.is_pii,
-                    profile=c.profile_json,
-                )
-            )
-    joins = [
-        {
-            "left": f"{by_id[r.left_dataset_id].table_name}.{r.left_column}",
-            "right": f"{by_id[r.right_dataset_id].table_name}.{r.right_column}",
-            "cardinality": r.cardinality,
-        }
-        for r in await session.scalars(
-            select(TableRelationship).where(TableRelationship.project_id == project.id)
-        )
-        if r.left_dataset_id in by_id and r.right_dataset_id in by_id
-    ]
-    return ProjectContext(
-        project_id=project.id,
-        topic=project.topic,
-        share_samples=project.share_samples,
-        tables=[
-            TableInfo(d.table_name, d.original_filename, d.row_count, columns.get(d.id, []))
-            for d in datasets
-        ],
-        joins=joins,
     )

@@ -91,6 +91,21 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
 
       {datasets.some((d) => d.status === "ready") && (
         <Link
+          href={`/projects/${project.id}/rqs`}
+          className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+        >
+          <span>
+            <span className="font-medium">Research question fit</span>{" "}
+            <span className="text-zinc-600 dark:text-zinc-400">
+              Check whether the data can answer your research questions.
+            </span>
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
+
+      {datasets.some((d) => d.status === "ready") && (
+        <Link
           href={`/projects/${project.id}/chat`}
           className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
         >

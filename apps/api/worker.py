@@ -20,6 +20,8 @@ from api.ingest.loader import LoadReport
 from api.ingest.pipeline import run_combine_plan, run_joins, run_load, run_pii, run_profile
 from api.llm.client import LLMClient
 from api.profiler.joins import JoinColumn, JoinTable
+from api.rq.jobs import TRIES as RQ_TRIES
+from api.rq.jobs import assess_rq, suggest_rqs
 from api.semantic.describer import column_evidence, describe
 from api.storage import project_db_path, upload_path
 
@@ -349,6 +351,8 @@ class WorkerSettings:
         ingest_dataset,
         combine_dataset,
         func(describe_dataset, max_tries=DESCRIBE_TRIES),
+        func(assess_rq, max_tries=RQ_TRIES),
+        suggest_rqs,
     ]
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
     max_tries = 1  # a CSV that fails to load will fail again; the error is stored instead

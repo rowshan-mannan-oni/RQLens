@@ -38,3 +38,16 @@ Reports are written to `reports/` as JSON with every case, plus a Markdown summa
 ## Before reporting numbers
 
 Check each gold result in `qa/gold.v1.json` by hand and set `reviewed: true`. Plan section 13 says the gold answers must not be trusted until a person has checked them.
+
+## Research-question verdicts (benchmark C)
+
+The cases are in `rq_fit/cases.v1.jsonl`. Each case has a question, its table, a hand-labelled `expected_verdict`, and a labelled `gold_parse` and `gold_mapping` (`reviewed: false` until a person checks them).
+
+```sh
+PYTHONPATH=apps:. python evals/run_eval.py rq --gold-mapping   # labelled mappings, no LLM
+PYTHONPATH=apps:. python evals/run_eval.py rq                  # the LLM parses and maps
+```
+
+The `--gold-mapping` mode checks the measurements and the verdict rules on their own, so mapping errors don't affect the result. The full mode also reports mapping precision and recall: the share of `(role, table.column)` pairs that match the labelled mapping.
+
+The plan's target is 60 labelled pairs, about a third of them partial or not answerable, with a second person labelling 20. The 13 current cases are development cases: one rule was added after seeing one of them (see `DECISIONS.md`), so do not report their agreement as accuracy.
