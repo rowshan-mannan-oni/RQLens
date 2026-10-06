@@ -216,3 +216,69 @@ export type DatasetProfile = {
   warnings: DataWarning[];
   columns: Column[];
 };
+
+export type Chat = { id: number; title: string; created_at: string };
+
+export type ChartSpec = {
+  id: number;
+  query_id: number;
+  type: "bar" | "line" | "scatter";
+  title: string;
+  x: string;
+  y: string[];
+  data: Record<string, string | number | null>[];
+  truncated: boolean;
+};
+
+export type AgentStep = {
+  tool: string;
+  args: Record<string, unknown>;
+  summary: string;
+  error?: string;
+  query_id?: number;
+  result?: Record<string, unknown>;
+};
+
+export type ChatQuery = {
+  id: number;
+  sql: string;
+  row_count: number | null;
+  duration_ms: number | null;
+  error: string | null;
+  columns: string[];
+  rows: unknown[][];
+};
+
+export type MessageKind =
+  "answer" | "clarification" | "cannot_answer" | "error" | "pending";
+
+export type ChatMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  kind: MessageKind | null;
+  charts: ChartSpec[];
+  steps: AgentStep[];
+  queries: ChatQuery[];
+  grounding: { ok: boolean; checked: number; unsupported: string[] } | null;
+  usage: {
+    llm_calls: number;
+    tool_calls: number;
+    tokens: number;
+    cost_usd: string;
+    sql_errors: number;
+    grounding_retries: number;
+    duration_ms: number;
+  } | null;
+  stopped: "tool_calls" | "sql_errors" | "tokens" | "time" | null;
+};
+
+export type ChatDetail = { chat: Chat; messages: ChatMessage[] };
+
+/** Server-sent events from POST /projects/{id}/chats/{chatId}/messages. */
+export type ChatEvent =
+  | { type: "accepted"; user_message_id: number; id: number }
+  | { type: "status"; text: string }
+  | { type: "step"; step: AgentStep }
+  | { type: "done"; message: ChatMessage };

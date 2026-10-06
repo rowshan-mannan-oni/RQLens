@@ -194,6 +194,8 @@ class Message(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     chart_json: Mapped[Json | None]
+    # Assistant messages: kind, tool steps, query ids, grounding result, usage and limits hit.
+    trace_json: Mapped[Json | None]
 
 
 class Query(TimestampMixin, Base):

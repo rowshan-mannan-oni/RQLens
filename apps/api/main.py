@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import get_settings
-from api.routes import combine, datasets, health, projects, query, relationships
+from api.routes import chat, combine, datasets, health, projects, query, relationships
 
 
 @asynccontextmanager
@@ -33,3 +33,4 @@ app.include_router(datasets.router)
 app.include_router(relationships.router)
 app.include_router(query.router)
 app.include_router(combine.router)
+app.include_router(chat.router)

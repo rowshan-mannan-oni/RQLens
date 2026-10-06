@@ -22,6 +22,13 @@ from api.llm.tracing import Tracer, TraceRecord, db_tracer
 Message = Mapping[str, Any]
 
 
+@dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    arguments: str  # JSON text as the model wrote it
+
+
 class StructuredOutputError(Exception):
     """The model did not return output matching the schema after all attempts."""
 
@@ -35,6 +42,10 @@ class LLMResult[T: BaseModel]:
     output_tokens: int
     cost_usd: Decimal
     latency_ms: int
+    tool_calls: tuple[ToolCall, ...] = ()
+    # The assistant message as returned, to append to the conversation. Provider-specific
+    # fields (such as Gemini thought signatures on tool calls) are kept.
+    message: dict[str, Any] | None = None
 
 
 class LLMClient:
@@ -85,8 +96,10 @@ class LLMClient:
         eval_run_id: int | None = None,
         temperature: float = 0.0,
         response_format: dict[str, Any] | None = None,
+        tools: Sequence[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> LLMResult[BaseModel]:
-        """One chat completion, traced."""
+        """One chat completion, traced. Failed calls are traced too, then re-raised."""
         model = model or self.model
         request: dict[str, Any] = {
             "model": model,
@@ -95,28 +108,55 @@ class LLMClient:
         }
         if response_format is not None:
             request["response_format"] = response_format
+        if tools:
+            request["tools"] = list(tools)
+            if tool_choice is not None:
+                request["tool_choice"] = tool_choice
 
-        started = time.perf_counter()
-        response = cast(ChatCompletion, await self._client.chat.completions.create(**request))
-        latency_ms = round((time.perf_counter() - started) * 1000)
-
-        input_tokens = response.usage.prompt_tokens if response.usage else 0
-        output_tokens = response.usage.completion_tokens if response.usage else 0
-        cost = cost_usd(self._prices, model, input_tokens, output_tokens)
-        text = response.choices[0].message.content or "" if response.choices else ""
-
-        await self._tracer(
-            TraceRecord(
+        def trace(**fields: Any) -> TraceRecord:
+            return TraceRecord(
                 step=step,
                 model=model,
                 prompt_version=prompt_version,
                 project_id=project_id,
                 eval_run_id=eval_run_id,
+                request_json=request,
+                **fields,
+            )
+
+        started = time.perf_counter()
+        try:
+            response = cast(ChatCompletion, await self._client.chat.completions.create(**request))
+        except Exception as exc:
+            await self._tracer(
+                trace(
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=Decimal(0),
+                    latency_ms=round((time.perf_counter() - started) * 1000),
+                    response_json={"error": f"{type(exc).__name__}: {exc}"},
+                )
+            )
+            raise
+        latency_ms = round((time.perf_counter() - started) * 1000)
+
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
+        cost = cost_usd(self._prices, model, input_tokens, output_tokens)
+        choice = response.choices[0].message if response.choices else None
+        text = (choice.content or "") if choice else ""
+        tool_calls = tuple(
+            ToolCall(id=c.id, name=c.function.name, arguments=c.function.arguments or "{}")
+            for c in (choice.tool_calls or [] if choice else [])
+            if c.type == "function"
+        )
+
+        await self._tracer(
+            trace(
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
                 cost_usd=cost,
                 latency_ms=latency_ms,
-                request_json=request,
                 response_json=response.model_dump(mode="json"),
             )
         )
@@ -128,6 +168,8 @@ class LLMClient:
             output_tokens=output_tokens,
             cost_usd=cost,
             latency_ms=latency_ms,
+            tool_calls=tool_calls,
+            message=choice.model_dump(mode="json", exclude_none=True) if choice else None,
         )
 
     async def complete_structured[T: BaseModel](

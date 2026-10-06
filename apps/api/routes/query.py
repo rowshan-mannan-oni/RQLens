@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from api.db.models import Dataset, Query
 from api.routes.deps import OwnedProject, Queue, Session
-from api.sql.executor import QueryResult, run_query
+from api.sql.executor import ROW_LIMIT, QueryResult, run_query
 from api.storage import project_db_path
 
 router = APIRouter(prefix="/projects/{project_id}/query", tags=["query"])
@@ -40,6 +40,7 @@ async def execute_logged(
     queue: Queue,
     *,
     message_id: int | None = None,
+    row_limit: int = ROW_LIMIT,
 ) -> tuple[int, QueryResult]:
     """Run a guarded query under the project's DuckDB lock and log it in `queries`."""
     tables = list(
@@ -53,7 +54,9 @@ async def execute_logged(
     lock = queue.lock(f"rqlens:duckdb:{project_id}", timeout=120, blocking_timeout=LOCK_WAIT_S)
     try:
         async with lock:
-            result = await asyncio.to_thread(run_query, project_db_path(project_id), sql, tables)
+            result = await asyncio.to_thread(
+                run_query, project_db_path(project_id), sql, tables, row_limit=row_limit
+            )
     except LockError as exc:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "A dataset is being updated; try again shortly"
