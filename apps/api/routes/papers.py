@@ -40,6 +40,7 @@ class PaperOut(BaseModel):
     venue: str | None
     doi: str | None
     metadata_source_json: dict[str, str] | None
+    ocr_pages_json: list[int] | None
     created_at: datetime
 
 

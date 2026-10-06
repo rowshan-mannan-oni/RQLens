@@ -12,7 +12,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first so code edits don't bust the layer cache.
-# EXTRAS: "dev" for local work (tests, linters); docker-compose.prod.yml uses "sentry".
+# EXTRAS: "dev" for local work (tests, linters); docker-compose.prod.yml uses "sentry,ocr".
 ARG EXTRAS=dev
 COPY pyproject.toml ./
 RUN mkdir -p apps/api && touch apps/api/__init__.py \

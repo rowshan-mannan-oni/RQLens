@@ -247,6 +247,7 @@ class Paper(TimestampMixin, Base):
     doi: Mapped[str | None] = mapped_column(String(300))
     metadata_source_json: Mapped[Json | None]  # field -> pdf_metadata | first_page | user
     sections_json: Mapped[Json | None]
+    ocr_pages_json: Mapped[Json | None]  # pages whose text was read with OCR
 
 
 class Passage(Base):

@@ -55,7 +55,8 @@ SECTION_WORDS: list[tuple[str, str]] = [
     ("references", r"references|bibliography|works cited"),
     ("appendix", r"appendix|appendices|supplementary material"),
 ]
-NUMBERING = r"(?:(?:\d+(?:\.\d+)*|[IVXL]+|[A-Z])[.)]?\s+)?"
+# "2.1 ", "2.1." and, in OCR text, "2.Method"; roman numerals and letters need "." or a space.
+NUMBERING = r"(?:\d+(?:\.\d+)*[.)]?\s*|(?:[IVXL]+|[A-Z])(?:[.)]\s*|\s+))?"
 HEADING_RE = [
     (kind, re.compile(rf"^{NUMBERING}(?:{words})\s*[:.]?$", re.IGNORECASE))
     for kind, words in SECTION_WORDS
@@ -151,21 +152,34 @@ class ParsedPaper:
     passages: list[Passage]
     char_count: int
     removed_lines: int  # headers, footers and page numbers dropped
+    ocr_pages: list[int] = field(default_factory=list)  # pages read with OCR
 
 
-def parse_pdf(path: Path | str) -> ParsedPaper:
+def parse_pdf(path: Path | str, *, ocr: bool = False, max_ocr_pages: int = 60) -> ParsedPaper:
     with pymupdf.open(path) as doc:  # type: ignore[no-untyped-call]
-        return parse_document(doc)
+        return parse_document(doc, ocr=ocr, max_ocr_pages=max_ocr_pages)
 
 
-def parse_bytes(data: bytes) -> ParsedPaper:
+def parse_bytes(data: bytes, *, ocr: bool = False, max_ocr_pages: int = 60) -> ParsedPaper:
     with pymupdf.open(stream=data, filetype="pdf") as doc:  # type: ignore[no-untyped-call]
-        return parse_document(doc)
+        return parse_document(doc, ocr=ocr, max_ocr_pages=max_ocr_pages)
 
 
-def parse_document(doc: Any) -> ParsedPaper:
+def parse_document(doc: Any, *, ocr: bool = False, max_ocr_pages: int = 60) -> ParsedPaper:
+    """Read the paper. With `ocr`, pages without a text layer (scanned pages) are read with
+    OCR, up to `max_ocr_pages` of them; otherwise a scanned paper is marked "needs OCR"."""
     pages = [_read_page(page, i + 1) for i, page in enumerate(doc)]
     sizes = [(round(p.rect.width, 1), round(p.rect.height, 1)) for p in doc]
+    ocr_pages: list[int] = []
+    if ocr:
+        scanned = [
+            i for i, blocks in enumerate(pages)
+            if sum(len(ln.text) for b in blocks for ln in b.lines) < MIN_CHARS_PER_PAGE
+        ][:max_ocr_pages]  # fmt: skip
+        for i in scanned:
+            pages[i] = _ocr_page(doc[i], i + 1)
+            if pages[i]:
+                ocr_pages.append(i + 1)
     char_count = sum(len(line.text) for blocks in pages for b in blocks for line in b.lines)
     if not pages or char_count < MIN_CHARS_PER_PAGE * len(pages):
         return ParsedPaper(len(pages), sizes, True, _pdf_metadata(doc), [], [], char_count, 0)
@@ -210,7 +224,9 @@ def parse_document(doc: Any) -> ParsedPaper:
 
     passages, sections = b.passages, b.sections
     metadata = _metadata(doc, ordered, body_size, sections)
-    return ParsedPaper(len(pages), sizes, False, metadata, sections, passages, char_count, removed)
+    return ParsedPaper(
+        len(pages), sizes, False, metadata, sections, passages, char_count, removed, ocr_pages
+    )
 
 
 class _Builder:
@@ -304,6 +320,49 @@ def _read_page(page: Any, page_no: int) -> list[Block]:
         if lines:
             blocks.extend(_split_block(page_no, lines))
     return blocks
+
+
+def _ocr_page(page: Any, page_no: int) -> list[Block]:
+    """Blocks from OCR lines. A line joins the block above it when it starts at about the
+    same x and follows within one line height, so paragraphs and columns stay together."""
+    from api.papers.ocr import ocr_lines, unglue
+
+    lines: list[Line] = []
+    for raw, (x0, y0, x1, y1), _conf in sorted(ocr_lines(page), key=lambda r: (r[1][1], r[1][0])):
+        text = unglue(raw)
+        step = (x1 - x0) / max(1, len(text))
+        chars = [(c, (x0 + i * step, y0, x0 + (i + 1) * step, y1)) for i, c in enumerate(text)]
+        # Box height is about the font size plus line spacing.
+        lines.append(Line(page_no, text, chars, (x0, y0, x1, y1), round((y1 - y0) * 0.8, 1), False))
+
+    groups: list[list[Line]] = []
+    for line in lines:
+        height = line.bbox[3] - line.bbox[1]
+        home = None
+        # OCR gives no font sizes or weights, so a heading is kept apart by its words.
+        heading = _looks_heading(line.text)
+        for g in [] if heading else reversed(groups):
+            if _looks_heading(g[-1].text):
+                continue
+            last = g[-1]
+            gap = line.bbox[1] - last.bbox[3]
+            if (
+                -height * 0.3 <= gap <= height * 1.0
+                and abs(line.bbox[0] - g[0].bbox[0]) < max(12.0, height * 1.5)
+                and abs(line.size - last.size) <= max(1.0, last.size * 0.2)
+            ):
+                home = g
+                break
+        if home is None:
+            groups.append([line])
+        else:
+            home.append(line)
+    return [Block(page_no, _union([ln.bbox for ln in g]), g) for g in groups]
+
+
+def _looks_heading(text: str) -> bool:
+    clean = re.sub(r"\s+", " ", text).strip()
+    return len(clean) < 60 and any(p.match(clean) for _, p in HEADING_RE)
 
 
 def _split_block(page_no: int, lines: list[Line]) -> list[Block]:
@@ -488,7 +547,9 @@ def _join(left: list[Char], right: list[Char]) -> list[Char]:
 def _continues(pending: list[Char], pending_size: float, size: float) -> bool:
     """Whether a block continues the paragraph collected so far."""
     text = _text(pending)
-    return abs(size - pending_size) <= 0.6 and not TERMINAL.search(text)
+    # OCR sizes come from box heights and vary from line to line.
+    tolerance = max(0.6, pending_size * 0.15)
+    return abs(size - pending_size) <= tolerance and not TERMINAL.search(text)
 
 
 def _strip_prefix(chars: list[Char], n: int) -> list[Char]:
@@ -610,9 +671,10 @@ def _metadata(
     if top:
         biggest = max(ln.size for ln in top)
         if biggest > body_size * 1.15:
-            start = next(i for i, ln in enumerate(top) if ln.size >= biggest - 0.5)
+            close = max(0.5, biggest * 0.12)  # OCR sizes vary a little between lines
+            start = next(i for i, ln in enumerate(top) if ln.size >= biggest - close)
             for ln in top[start:]:
-                if ln.size < biggest - 0.5:
+                if ln.size < biggest - close:
                     break
                 title_lines.append(ln)
     if title_lines and "title" not in out.source:
@@ -652,10 +714,12 @@ def _metadata(
     if doi:
         out.doi, out.source["doi"] = doi.group(1).rstrip(".,;)"), "first_page"
     if "venue" not in out.source:
+        # Front matter only: the reference list is full of other papers' venues.
+        front_text = "\n".join(b.text for b in front)
         venue = re.search(
             r"((?:(?:IEEE|ACM)\s+)?(?:Proceedings of|Journal of|Transactions on)"
             r"[^\n\u00b7|\u00a9]{3,120}?)(?=\s*(?:[\u00b7|\u00a9\n,(]|DOI|$))",
-            first_text,
+            front_text,
             re.IGNORECASE,
         )
         if venue:

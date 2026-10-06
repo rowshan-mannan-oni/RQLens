@@ -507,6 +507,7 @@ export type Paper = {
   venue: string | null;
   doi: string | null;
   metadata_source_json: Record<string, string> | null;
+  ocr_pages_json: number[] | null;
   created_at: string;
 };
 
