@@ -6,6 +6,8 @@ Working name: **RQ Lens** (rename freely).
 
 A web app for researchers. The user enters a research topic or research questions (RQs) and uploads a dataset. The app profiles the whole dataset with code, judges whether the data can answer each RQ, surfaces insights related to the RQs, and answers follow-up questions in chat. Every number shown comes from a query that was executed and can be inspected.
 
+A second module, **Literature review** (Phase 7), works on papers instead of data. The user uploads their papers, or picks a folder of them, and the AI fills in a review table (title, authors, problem, approach, dataset, metrics, results, findings, limitations, conclusion, or the user's own columns). Every cell cites its source, and clicking a citation opens the paper at the exact sentence the value came from, highlighted. Tools such as Anara, Elicit and SciSpace offer similar tables; the difference here is that citations are verified against the text rather than trusted.
+
 ### The problem
 
 A researcher cannot read a large dataset row by row, yet the dataset decides which questions can be answered. Problems such as missing variables, small subgroups, or biased sampling are often found late, after the research design is fixed.
@@ -16,6 +18,7 @@ A researcher cannot read a large dataset row by row, yet the dataset decides whi
 - For each RQ, state whether the data can answer it, with evidence.
 - Answer free-form questions about the data with verifiable numbers.
 - Measure all three with reproducible benchmarks.
+- Turn a folder of papers into a literature review table in minutes, where every cell can be traced to the sentence it came from.
 
 ### Non-goals (v1)
 
@@ -23,11 +26,14 @@ A researcher cannot read a large dataset row by row, yet the dataset decides whi
 - Image, audio, or free-text corpora (see section 12).
 - Live database connections. v1 accepts CSV files only.
 - Data cleaning or editing. The dataset is read-only.
+- Searching for papers online or discovering new literature. The literature module works on papers the user already has.
+- Writing the literature review section of a paper. The table is for reading and comparing; synthesis comes later (section 12).
 
-### Two design rules
+### Three design rules
 
 1. **Every number comes from an executed query.** The LLM writes queries and interprets results. It never states a statistic from memory.
 2. **Insights are labelled exploratory.** A tool that scans many patterns will find some by chance. Insights are presented as hypotheses to test, with effect sizes and caveats.
+3. **Every extracted claim cites the exact passage it came from.** The LLM may only cite passages the app gave it, by ID, and each citation is checked against the paper's text before it is shown. A cell whose citation fails the check is shown as unverified, never as fact.
 
 ### Target metrics
 
@@ -41,6 +47,9 @@ Set real targets after the first benchmark run. Starting placeholders:
 | RQ verdict agreement with hand labels | 75% or higher |
 | Numeric claims traceable to a query | 100% |
 | Time to first profile (100 MB CSV) | Under 60 seconds |
+| Literature table cell accuracy (hand labels) | 85% or higher |
+| Citations that contain the cited claim | 95% or higher |
+| Time to fill a 10-column table for 20 papers | Under 5 minutes |
 
 ---
 
@@ -55,6 +64,15 @@ Set real targets after the first benchmark run. Starting placeholders:
 7. Ask follow-up questions in **Chat**.
 8. Export a dataset report (Markdown or PDF).
 
+**Literature review flow**
+
+1. Open the **Literature** tab of a project. Upload PDFs, or choose a folder; every PDF inside it is uploaded.
+2. Pick a table template (the default literature-review template, or one of your own), or create a template by naming columns and describing what each should hold.
+3. The AI fills the table, one row per paper, while you watch cells appear.
+4. Click a citation marker in any cell. The paper opens beside the table at the cited page, with the source sentence highlighted.
+5. Correct a cell by hand, or accept it. Re-run one column, one paper or the whole table.
+6. Export the table (CSV, Excel or Markdown), with citations as page and line references.
+
 ---
 
 ## 3. Architecture
@@ -68,11 +86,15 @@ API (FastAPI) ───enqueue──> Redis ──> Worker
      │                                  ├─ Profiler (deterministic SQL, no LLM)
      │                                  ├─ Describer (LLM column descriptions)
      │                                  ├─ RQ analyser (LLM + queries)
-     │                                  └─ Insight generator (LLM + queries + stats)
+     │                                  ├─ Insight generator (LLM + queries + stats)
+     │                                  ├─ Paper parser (PDF to pages, lines, positions)
+     │                                  └─ Review extractor (LLM + citation check)
      │
      ├─ Chat agent (LLM + tools, streamed)
-     ├─ Postgres: users, projects, RQs, profiles, insights, chats, traces
-     └─ DuckDB: one file per project holding the uploaded data (opened read-only)
+     ├─ Postgres: users, projects, RQs, profiles, insights, chats, traces,
+     │            papers, passages, templates, review cells with citations
+     ├─ DuckDB: one file per project holding the uploaded data (opened read-only)
+     └─ File storage: uploaded PDFs, served back to the browser's PDF viewer
 ```
 
 **Key decisions**
@@ -82,6 +104,7 @@ API (FastAPI) ───enqueue──> Redis ──> Worker
 - **The LLM sees metadata, not the dataset.** It receives the schema, profile statistics, a few masked sample values, and query results.
 - **Statistics come from a fixed tool library,** not free-form Python. This is safer than running generated code and easier to test.
 - **Every LLM call and query is traced** for the dashboard, for debugging, and for the evaluation.
+- **Papers are split into numbered passages with their positions on the page.** The LLM cites passage IDs, never free text, so a citation can always be resolved to a page and a highlight box. The citation check compares the quoted words with the passage text.
 
 ### Tech stack
 
@@ -94,6 +117,8 @@ API (FastAPI) ───enqueue──> Redis ──> Worker
 | Jobs | Redis + arq | Profiling and analysis run in the background |
 | SQL validation | sqlglot | Parse and restrict generated SQL |
 | Statistics | scipy, statsmodels | Tests and effect sizes |
+| PDF text and layout | PyMuPDF (text, lines and bounding boxes per page); GROBID optional for headers and references | Positions are needed to highlight the cited line |
+| PDF viewer | PDF.js (react-pdf) with a highlight layer | Opens a paper at a page and draws the cited box |
 | LLM | Provider API with tool use and structured output | Check current models and prices before starting |
 | Auth | Google or GitHub OAuth (Auth.js) | Simple |
 | Deploy | Docker Compose; Railway, Fly.io, or a small VPS | Low cost |
@@ -114,6 +139,7 @@ rq-lens/
 │   │   ├── semantic/        # describer.py, pii.py, column_retrieval.py
 │   │   ├── rq/              # parser.py, mapper.py, feasibility.py, verdict.py
 │   │   ├── insights/        # planner.py, runner.py, ranking.py
+│   │   ├── literature/      # parser.py, passages.py, templates.py, extractor.py, citations.py
 │   │   ├── agent/           # loop.py, tools.py, prompts/, grounding.py
 │   │   ├── sql/             # guard.py, executor.py
 │   │   ├── stats/           # tests.py, effect_sizes.py, corrections.py
@@ -125,6 +151,7 @@ rq-lens/
 │   ├── qa/                  # questions with gold SQL and answers
 │   ├── planted/             # issue injectors and clean base datasets
 │   ├── rq_fit/              # dataset and RQ pairs with hand labels
+│   ├── literature/          # open-access papers with hand-filled review tables
 │   ├── run_eval.py
 │   └── reports/
 ├── tests/
@@ -170,6 +197,23 @@ llm_calls (id, project_id, eval_run_id, step, model, prompt_version,
            input_tokens, output_tokens, cost_usd, latency_ms,
            request_json, response_json, created_at)
 
+-- Literature review (Phase 7)
+papers (id, project_id, filename, file_path, sha256, status, error, title, authors_json,
+        year, venue, doi, page_count, text_chars, parse_warnings_json, created_at)
+passages (id, paper_id, ordinal, page, section, text,
+          boxes_json,                        -- one or more [x0, y0, x1, y1] rectangles on the page
+          char_start, char_end, line_start, line_end)
+review_templates (id, user_id, name, is_builtin, columns_json, created_at)
+     -- columns_json: [{key, label, instructions, kind: text|list|number|category,
+     --                 options, required}]
+review_tables (id, project_id, template_id, columns_json, status, created_at)
+     -- columns_json is a snapshot, so editing a template later does not change old tables
+review_cells (id, review_table_id, paper_id, column_key, value_json, status,
+              -- status: filled | not_found | unverified | edited | failed
+              confidence, source,             -- llm | user
+              llm_call_id, updated_at)
+cell_citations (id, cell_id, passage_id, quote, match_score, verified)
+
 eval_runs (id, suite, dataset_version, config_json, git_sha, metrics_json, created_at)
 eval_results (id, eval_run_id, case_id, passed, details_json, cost_usd)
 ```
@@ -178,7 +222,7 @@ eval_results (id, eval_run_id, case_id, passed, details_json, cost_usd)
 
 ## 6. Phases
 
-Estimates assume about 15 hours per week. Total: about 11 weeks.
+Estimates assume about 15 hours per week. Total: about 11 weeks for Phases 0 to 6, plus 3 weeks for the literature module (Phase 7).
 
 ### Phase 0: Setup (week 1)
 
@@ -391,6 +435,74 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 - [ ] Deploy, add health checks and error tracking.
 - [ ] README with architecture diagram, results, and limitations. Record a 2-minute demo video.
 
+### Phase 7: Literature review with cited extraction (weeks 12 to 14)
+
+A second module in each project: turn the researcher's papers into a review table where every cell cites the sentence it came from. Similar to Anara, Elicit and SciSpace, with one difference that matters for research: citations are checked against the paper, and anything unchecked is labelled.
+
+**Step 1: Bring in the papers**
+
+- [ ] Upload many PDFs at once, and **choose a folder**: the browser's folder picker (`<input webkitdirectory>`) and drag-and-drop of a folder both upload every PDF inside it, keeping the subfolder path as a label. The server cannot read the user's disk, so a folder is always uploaded, never linked.
+- [ ] Limits: 50 MB per PDF and 200 papers per project at first. Duplicates are detected by file hash and skipped.
+- [ ] Optional later: import a BibTeX or RIS file, or a Zotero collection, to attach metadata and file links.
+
+**Step 2: Parse each paper into citable passages**
+
+- [ ] Extract text **with positions** using PyMuPDF: every line keeps its page and bounding box. Remove running headers, footers and page numbers by detecting text that repeats on most pages. Join hyphenated line breaks.
+- [ ] Split into **passages**, normally one sentence each and never across pages, numbered per paper (`P3-S12`, or an ordinal). Each passage keeps its page, its line range and one rectangle per line, which is what the viewer highlights.
+- [ ] Detect sections (Abstract, Introduction, Method, Results, Discussion, Limitations, Conclusion, References) from font size and common heading words. The reference list is kept for display but never cited as evidence.
+- [ ] Read metadata (title, authors, year, venue, DOI) from the PDF's metadata and its first page. GROBID can improve this and parse references if the simple approach is not good enough.
+- [ ] **Scanned PDFs** have no text layer. Detect this (almost no extractable characters) and mark the paper "needs OCR". OCR with positions (Tesseract or a cloud OCR) is a later step.
+- [ ] Two-column layouts, tables and equations: read lines in column order using block positions. Tables are cited by caption. Equations can be cited but are shown as an image region.
+- [ ] Unit tests on a small set of open-access PDFs: single and two-column layouts, a scanned page, a paper with a long reference list.
+
+**Step 3: Templates**
+
+- [ ] A built-in **literature review template** with these columns: Paper title, Authors, Year, Problem statement, Research questions, Approach / method, Dataset(s), Metrics, Results, Key findings, Limitations, Conclusion, Future work. Each column has instructions, for example "Metrics: the evaluation measures reported, such as accuracy or F1, with their values if stated".
+- [ ] **User templates:** add, remove, rename and reorder columns. Each column has a label, plain-language instructions, a kind (text, list, number, or a category with fixed options, such as study type: experiment, survey, case study) and whether it is required. Templates belong to the user and can be reused across projects.
+- [ ] More built-in templates later: systematic review (PRISMA-style screening fields), empirical software engineering, clinical study (PICO: population, intervention, comparison, outcome).
+- [ ] Add a column to an existing table, and only that column is extracted.
+
+**Step 4: Extraction with citations**
+
+- [ ] For each paper, send the LLM the template's columns and the paper's passages, each with its ID: `[P4-S7] We evaluate on the Defects4J benchmark…`. The structured output is, per column, a value, the passage IDs that support it, a short quote from each, a confidence, or `not_found` with a reason.
+- [ ] **The LLM can only cite passage IDs the app gave it.** Unknown IDs are dropped.
+- [ ] **Citation check (no LLM).** The quote must appear in the cited passage: an exact match after normalising whitespace and hyphenation, or a fuzzy match at or above a threshold for small extraction differences. A number in the value must appear in a cited passage, as in the grounding check. Cells that fail are retried once with the failure explained, then shown as **unverified**.
+- [ ] **Long papers.** Short papers go in one call. For longer ones, embed the passages (reusing the column-retrieval code) and send each column's top passages plus the abstract and conclusion. This also keeps cost bounded.
+- [ ] Metadata columns (title, authors, year) come from the parsed metadata first, and the LLM only when that is missing.
+- [ ] One background job per paper, in parallel within the provider's rate limits, with retries for "busy" errors as for column descriptions. Cells stream into the table as they finish.
+- [ ] Every extraction call is traced in `llm_calls`, with the prompt version, the template version and the cost per paper.
+
+**Step 5: The review table and the reader**
+
+- [ ] **Table view:** one row per paper and one column per template field. Columns can be resized and pinned, the title column stays fixed, rows can be sorted and filtered, and long cells are clamped with "show more". Each status has a visible marker: not found, unverified, edited.
+- [ ] **Citation markers** appear inline, like `[1] [2]`. Hovering shows the quoted sentence and its page. Clicking opens the **reader**.
+- [ ] **Reader:** a side panel with the PDF (PDF.js) opened at the cited page and scrolled to it, with the cited passage's rectangles highlighted. Previous and next buttons step through the cell's citations. The passage text is shown above the PDF, so a citation still works if the PDF cannot render.
+- [ ] **Editing:** change any cell by hand (`source = user`). Your edits are never overwritten when the table is re-run. Accept or reject AI values. Re-run a cell, a column, a paper or the whole table.
+- [ ] **Export:** CSV and Excel with one column per field, plus a "citations" companion column listing paper, page and quote. Markdown table. BibTeX for the papers.
+- [ ] Later: ask questions across the papers in chat ("Which papers use Defects4J?"), answered with the same citation mechanism.
+
+**Step 6: Connect to the rest of RQ Lens**
+
+- [ ] Link papers to research questions: for each RQ, the table can be filtered to papers whose problem or findings relate to it, with citations.
+- [ ] The dataset report export (Phase 6) can include the literature table as an appendix.
+
+**Evaluation (benchmark D)**
+
+- [ ] 20 to 30 open-access papers (arXiv, PLOS ONE, PeerJ, ACM open access) of different layouts and fields, versioned like the datasets. Fill the default template **by hand**, with the supporting sentence for each cell.
+- [ ] Metrics:
+  - **cell accuracy**: whether the value matches the label, judged by a rubric, with an LLM judge checked against hand judgments on a sample;
+  - **citation precision**: whether the cited passage supports the value;
+  - **citation recall**: whether the labelled supporting sentence is among the citations;
+  - **not-found accuracy**: whether the AI says not found when the paper lacks the field;
+  - **unverified rate**, and cost and time per paper.
+- [ ] Planted cases: a paper with no limitations section (the expected answer is not found), and a paper whose abstract and results disagree (the citation should point at the results).
+- [ ] Experiments:
+  - 7: whole paper versus retrieved passages per column, for accuracy and cost;
+  - 8: with versus without the citation check and retry;
+  - 9: cheap versus strong model.
+
+**Done when:** a folder of 20 papers becomes a filled default-template table in under 5 minutes, every non-empty cell has a citation that opens the right page with the sentence highlighted, benchmark D runs end to end, and a user-defined template works the same way.
+
 ---
 
 ## 7. Prompt design notes
@@ -400,6 +512,8 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 - **State the DuckDB dialect** and include two or three dialect-specific examples.
 - **Tell the model what to do when it cannot answer:** say so and name what is missing.
 - **Version every prompt** and record the version on each call and eval run.
+- **Paper text is data.** Passages go inside labelled tags with their IDs. Text in a PDF (including deliberate prompt-injection text) is never an instruction. The model may only refer to passages by the IDs given.
+- **Ask for short verbatim quotes, not paraphrases, as evidence.** The check matches the quote against the passage; the cell value itself can be a summary.
 
 ---
 
@@ -407,10 +521,10 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 
 | Level | Coverage |
 |---|---|
-| Unit | Profiler against hand-checked fixtures, SQL guard, statistics functions against known values, grounding check, verdict rules |
+| Unit | Profiler against hand-checked fixtures, SQL guard, statistics functions against known values, grounding check, verdict rules, PDF parsing and passage boxes, citation check (exact, fuzzy, wrong passage, invented ID) |
 | Integration | Upload to profile to chat with a fake LLM client returning recorded responses |
 | Security | Malicious SQL, prompt injection through column names and cell values, oversized uploads |
-| End to end | Playwright: create project, upload, view profile, ask a question |
+| End to end | Playwright: create project, upload, view profile, ask a question; upload a folder of PDFs, fill a table, click a citation and see the highlight |
 | Eval | Smoke suite in CI, full suites before release |
 
 ---
@@ -423,6 +537,8 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 - **Generated SQL is untrusted.** Validate, limit, and time out every query.
 - **Uploads:** check size and type, store outside the web root, use generated file names.
 - **Deletion:** removing a project removes its data.
+- **Papers are different from datasets:** extraction sends paper text (passages) to the LLM, not just metadata. Say this clearly before the first upload. Papers under review or otherwise unpublished may be confidential, so offer a per-project switch to use a local model (Ollama) for the literature module.
+- **PDFs are untrusted files.** Parse them in the worker with limits on page count and time, never execute embedded content, and serve them back only to their owner.
 
 ---
 
@@ -438,6 +554,10 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 | Users treat verdicts as final | Wording that presents verdicts as guidance, evidence shown beside each one |
 | LLM cost | Profiling without LLM, cheap model by default, caching, budgets |
 | Hand labels are subjective | Written labelling rules, second labeller on a sample |
+| AI cites the wrong sentence or invents a quote | Cite passage IDs only, check quotes against the text, show unverified cells as such |
+| PDF text extraction is poor (two columns, scans, equations) | Layout-aware parsing, a "needs OCR" state, the passage text shown beside the PDF |
+| Long papers exceed context or cost too much | Retrieve each column's passages; cap passages per call; budgets |
+| Prompt injection hidden in a PDF | Passages wrapped as data; only IDs can be cited; the check ignores the model's claims about the text |
 
 ---
 
@@ -452,6 +572,9 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 | 8 | 4 | Insights |
 | 9 to 10 | 5 | Three benchmarks, experiments, error analysis |
 | 11 | 6 | Report export, deployment, demo |
+| 12 | 7 | PDF upload (files and folders), parsing into passages with positions, templates |
+| 13 | 7 | Cited extraction with the citation check; review table with the PDF reader and highlights |
+| 14 | 7 | Editing, re-runs, export; benchmark D and its experiments |
 
 **Minimum version if time runs short:** Phases 0 to 3 plus benchmarks A and C. The insights page can be dropped; the RQ fit analysis cannot.
 
@@ -467,6 +590,13 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 4. **RQ fit and chat work unchanged,** because they operate on tables.
 
 The main costs are storage, compute for embeddings, and model calls per file, so sampling and budgets are required.
+
+**Literature module, later**
+
+- Synthesis across the table: themes, agreements and contradictions between papers, and research gaps, each claim citing the rows it rests on.
+- A draft related-work section built from the table, with citations kept.
+- Screening for systematic reviews: include or exclude by criteria, with reasons and citations, and a PRISMA flow count.
+- Search and import from Semantic Scholar, OpenAlex or arXiv by DOI.
 
 **Other items**
 

@@ -15,6 +15,7 @@ Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not sta
 | 4. Insights | Done; the AI-assisted planning and wording not yet run with a working model |
 | 5. Evaluation | Harness and first 31 chat questions in place; benchmarks not run |
 | 6. Export, polish, deployment | Project deletion done early; rest not started |
+| 7. Literature review (cited extraction) | Planned (added to plan.md); not started |
 
 Extra features added on request (not in the plan): multi-file upload, compare and combine datasets, delete with confirmation.
 
@@ -161,6 +162,24 @@ The ranking weights and confounder rules are written down in `DECISIONS.md` as a
 - [ ] README with architecture, results and limitations; 2-minute demo video.
 
 ---
+
+## Phase 7: Literature review with cited extraction
+
+Planned in plan.md (Phase 7). This is a new module modelled on tools like Anara: papers become a review table, and every cell cites the exact sentence it came from.
+
+- [ ] Upload PDFs one by one, many at once, or a whole folder (browser folder picker or drag-and-drop); duplicates skipped by hash.
+- [ ] Parse PDFs with positions (PyMuPDF): pages, lines, bounding boxes; strip headers and footers; detect sections; read metadata; flag scanned PDFs as "needs OCR".
+- [ ] Split into numbered, citable passages (about one sentence each) with their page and highlight rectangles.
+- [ ] Templates: a built-in literature-review template (title, authors, year, problem, RQs, approach, datasets, metrics, results, findings, limitations, conclusion, future work), and user-defined templates with typed columns and instructions.
+- [ ] Extraction per paper: values plus cited passage IDs and short quotes. The LLM can only cite IDs it was given; long papers use passages retrieved per column.
+- [ ] Citation check without an LLM: the quote must match the cited passage (exact or fuzzy) and numbers must appear in it; one retry, then "unverified".
+- [ ] Review table UI: sticky title column, sort and filter, status markers, inline citation markers with hover previews.
+- [ ] Reader: PDF.js side panel that opens at the cited page with the sentence highlighted; step through a cell's citations; passage text shown alongside.
+- [ ] Editing and re-runs (cell, column, paper, table); user edits are never overwritten; export to CSV, Excel and Markdown with citations, and BibTeX.
+- [ ] Link papers to research questions; include the table in the dataset report.
+- [ ] Benchmark D: 20 to 30 open-access papers with hand-filled tables and supporting sentences. Metrics: cell accuracy, citation precision and recall, not-found accuracy, unverified rate, cost and time. Experiments 7 to 9.
+
+**Done when:** a folder of 20 papers becomes a filled table in under 5 minutes, every non-empty cell's citation opens the right page with the sentence highlighted, benchmark D runs end to end, and custom templates work the same way.
 
 ## Extra features (added on request)
 
