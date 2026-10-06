@@ -12,7 +12,7 @@ type Table = { id: number; label: string };
 type Col = { name: string; label: string };
 
 const input =
-  "rounded-md border border-zinc-300 bg-transparent px-2 py-1.5 text-sm dark:border-zinc-700";
+  "rounded-md border border-line-strong bg-transparent px-2 py-1.5 text-sm";
 
 export function CombineForm({
   projectId,
@@ -61,13 +61,10 @@ export function CombineForm({
       : `${label(left).replace(/\.csv$/i, "")} + ${label(right).replace(/\.csv$/i, "")}`;
 
   return (
-    <form
-      action={action}
-      className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-    >
+    <form action={action} className="card flex flex-col gap-4 p-4">
       <div>
-        <h2 className="font-medium">Combine into a new dataset</h2>
-        <p className="text-sm text-zinc-500">
+        <h2 className="section-title">Combine into a new dataset</h2>
+        <p className="text-subtle text-sm">
           The result is profiled like an uploaded file and can be combined
           again. Your original files are not changed.
         </p>
@@ -122,7 +119,7 @@ export function CombineForm({
           className="grid gap-3 text-sm sm:grid-cols-2"
         >
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">Keep all rows of</span>
+            <span className="text-subtle text-xs">Keep all rows of</span>
             <select
               name="left_dataset"
               value={left}
@@ -137,7 +134,7 @@ export function CombineForm({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">Key column in it</span>
+            <span className="text-subtle text-xs">Key column in it</span>
             <select
               name="left_column"
               defaultValue={defaultLeftCol}
@@ -151,12 +148,12 @@ export function CombineForm({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">Add columns from</span>
+            <span className="text-subtle text-xs">Add columns from</span>
             <input type="hidden" name="right_dataset" value={right} />
             <span className="py-1.5">{label(right)}</span>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">Matching key column</span>
+            <span className="text-subtle text-xs">Matching key column</span>
             <select
               name="right_column"
               defaultValue={defaultRightCol}
@@ -170,7 +167,7 @@ export function CombineForm({
             </select>
           </label>
           <label className="flex flex-col gap-1 sm:col-span-2">
-            <span className="text-xs text-zinc-500">Rows without a match</span>
+            <span className="text-subtle text-xs">Rows without a match</span>
             <select name="how" defaultValue="left" className={input}>
               <option value="left">
                 Keep them (left join), with empty added columns
@@ -179,7 +176,7 @@ export function CombineForm({
             </select>
           </label>
           {(link || reversed) && (
-            <p className="text-xs text-zinc-500 sm:col-span-2">
+            <p className="text-subtle text-xs sm:col-span-2">
               Key columns pre-filled from the detected link between these files.
             </p>
           )}
@@ -187,7 +184,7 @@ export function CombineForm({
       )}
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-xs text-zinc-500">Name of the new dataset</span>
+        <span className="text-subtle text-xs">Name of the new dataset</span>
         <input
           key={defaultName}
           name="name"
@@ -199,10 +196,7 @@ export function CombineForm({
       </label>
 
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-      <button
-        disabled={pending}
-        className="self-start rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
-      >
+      <button disabled={pending} className="btn btn-primary self-start">
         {pending ? "Creating…" : "Create combined dataset"}
       </button>
     </form>

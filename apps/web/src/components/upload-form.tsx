@@ -1,5 +1,6 @@
 "use client";
 
+import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -51,6 +52,7 @@ function send(
 export function UploadForm({ projectId }: { projectId: number }) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
+  const [dragging, setDragging] = useState(false);
   const busy = items.some(
     (i) => i.state === "waiting" || i.state === "uploading",
   );
@@ -94,36 +96,67 @@ export function UploadForm({ projectId }: { projectId: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-dashed border-zinc-300 p-4 dark:border-zinc-700">
-      <label className="text-sm font-medium" htmlFor="csv-upload">
-        Upload CSV files
-      </label>
-      <input
-        id="csv-upload"
-        type="file"
-        accept=".csv,text/csv"
-        multiple
-        disabled={busy}
-        onChange={(e) => {
-          const files = Array.from(e.target.files ?? []);
-          e.target.value = "";
-          if (files.length) void uploadAll(files);
+    <div className="flex flex-col gap-3">
+      <label
+        htmlFor="csv-upload"
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!busy) setDragging(true);
         }}
-        className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-700 dark:file:bg-zinc-100 dark:file:text-zinc-900"
-      />
-      <p className="text-xs text-zinc-500">
-        Select one or more files, up to 500 MB each. Each file becomes its own
-        table.
-      </p>
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const files = Array.from(e.dataTransfer.files ?? []);
+          if (!busy && files.length) void uploadAll(files);
+        }}
+        data-dragging={dragging || undefined}
+        className="group border-line-strong bg-surface hover:border-brand/60 hover:bg-brand-soft/30 data-[dragging]:border-brand data-[dragging]:bg-brand-soft/50 flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 text-center transition"
+      >
+        <span className="bg-brand-soft text-brand-fg grid h-10 w-10 place-items-center rounded-full transition group-hover:scale-105">
+          <UploadCloud className="h-5 w-5" aria-hidden />
+        </span>
+        <span className="text-sm font-medium">
+          {busy ? "Uploading…" : "Drop CSV files here, or click to choose"}
+        </span>
+        <span className="text-subtle text-xs">
+          Up to 500 MB each · every file becomes its own table
+        </span>
+        <input
+          id="csv-upload"
+          type="file"
+          accept=".csv,text/csv"
+          multiple
+          disabled={busy}
+          onChange={(e) => {
+            const files = Array.from(e.target.files ?? []);
+            e.target.value = "";
+            if (files.length) void uploadAll(files);
+          }}
+          className="sr-only"
+        />
+      </label>
 
       {items.length > 0 && (
-        <ul className="mt-1 flex flex-col gap-2">
+        <ul className="card divide-line flex flex-col divide-y">
           {items.map((i) => (
-            <li key={i.key} className="text-sm">
+            <li key={i.key} className="flex flex-col gap-1.5 px-4 py-3 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <span className="truncate">{i.name}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <FileSpreadsheet
+                    className="text-subtle h-4 w-4 shrink-0"
+                    aria-hidden
+                  />
+                  <span className="truncate">{i.name}</span>
+                </span>
                 <span
-                  className={`shrink-0 text-xs ${i.state === "error" ? "text-red-600" : "text-zinc-500"}`}
+                  className={`shrink-0 text-xs font-medium ${
+                    i.state === "error"
+                      ? "text-red-600 dark:text-red-400"
+                      : i.state === "done"
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-subtle"
+                  }`}
                 >
                   {i.state === "waiting" && "Waiting"}
                   {i.state === "uploading" &&
@@ -139,15 +172,19 @@ export function UploadForm({ projectId }: { projectId: number }) {
                   aria-valuenow={Math.round(i.progress * 100)}
                   aria-valuemin={0}
                   aria-valuemax={100}
-                  className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
+                  className="bg-surface-3 h-1.5 overflow-hidden rounded-full"
                 >
                   <div
-                    className="h-full bg-zinc-900 transition-[width] dark:bg-zinc-100"
+                    className="bg-brand h-full rounded-full transition-[width]"
                     style={{ width: `${i.progress * 100}%` }}
                   />
                 </div>
               )}
-              {i.error && <p className="text-xs text-red-600">{i.error}</p>}
+              {i.error && (
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  {i.error}
+                </p>
+              )}
             </li>
           ))}
         </ul>

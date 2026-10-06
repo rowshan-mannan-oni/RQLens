@@ -23,7 +23,7 @@ const SHOWN = 15;
 function StrengthBar({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="h-2 w-28 shrink-0 rounded-sm bg-zinc-100 dark:bg-zinc-800">
+      <div className="bg-surface-3 h-2 w-28 shrink-0 rounded-sm">
         <div
           className="h-full rounded-r-[4px]"
           style={{
@@ -52,8 +52,8 @@ export function Associations({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="font-medium">Strongest associations</h2>
-        <p className="text-sm text-zinc-500">
+        <h2 className="section-title">Strongest associations</h2>
+        <p className="text-subtle text-sm">
           Exploratory: strong associations can come from chance, shared causes,
           or one column being derived from another. Computed on{" "}
           {formatInt(data.sample_rows)} rows
@@ -61,13 +61,13 @@ export function Associations({
         </p>
       </div>
       {rows.length === 0 ? (
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted">
           No associations of 0.1 or more between analysable columns.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <div className="border-line overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+            <thead className="border-line bg-surface-2 text-muted border-b text-left text-xs">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">
                   Columns
@@ -83,16 +83,16 @@ export function Associations({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-line divide-y">
               {rows.map((r) => (
                 <tr key={`${r.a}|${r.b}|${r.measure}`}>
                   <td className="px-3 py-2">
                     <span className="font-medium">{label(r.a)}</span>
-                    <span className="text-zinc-500"> × </span>
+                    <span className="text-subtle"> × </span>
                     <span className="font-medium">{label(r.b)}</span>
                   </td>
                   <td
-                    className="px-3 py-2 text-zinc-600 dark:text-zinc-400"
+                    className="text-muted px-3 py-2"
                     title={MEASURE[r.measure].help}
                   >
                     {MEASURE[r.measure].label}
@@ -100,7 +100,7 @@ export function Associations({
                   <td className="px-3 py-2">
                     <StrengthBar value={r.value} />
                   </td>
-                  <td className="px-3 py-2 text-right text-zinc-600 tabular-nums dark:text-zinc-400">
+                  <td className="text-muted px-3 py-2 text-right tabular-nums">
                     {formatInt(r.n)}
                   </td>
                 </tr>
@@ -109,7 +109,7 @@ export function Associations({
           </table>
         </div>
       )}
-      <p className="text-xs text-zinc-500">
+      <p className="text-subtle text-xs">
         {Object.values(MEASURE)
           .map((m) => `${m.label}: ${m.help}`)
           .join(" · ")}
@@ -131,8 +131,8 @@ export function MissingPatterns({
   if (co_missing.length === 0 && dependencies.length === 0) {
     return (
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium">Missing-data patterns</h2>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <h2 className="section-title">Missing-data patterns</h2>
+        <p className="text-muted">
           No columns are missing together, and no missingness depends clearly on
           another column.
         </p>
@@ -142,8 +142,8 @@ export function MissingPatterns({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="font-medium">Missing-data patterns</h2>
-        <p className="text-sm text-zinc-500">
+        <h2 className="section-title">Missing-data patterns</h2>
+        <p className="text-subtle text-sm">
           Missing values that follow a pattern can bias any analysis that drops
           incomplete rows.
         </p>

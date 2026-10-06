@@ -35,10 +35,7 @@ export function ConfirmDialog({
           e.stopPropagation();
           dialog.current?.showModal();
         }}
-        className={
-          triggerClassName ??
-          "rounded-md border border-zinc-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 dark:border-zinc-700 dark:text-red-400 dark:hover:bg-red-950/40"
-        }
+        className={triggerClassName ?? "btn btn-sm btn-danger"}
       >
         {triggerLabel}
       </button>
@@ -49,34 +46,32 @@ export function ConfirmDialog({
           // Clicking the backdrop (the dialog element itself) closes it.
           if (e.target === dialog.current && !pending) dialog.current.close();
         }}
-        className="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+        className="border-line bg-surface text-fg shadow-pop m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border p-0 backdrop:bg-black/40 backdrop:backdrop-blur-[2px]"
       >
-        <form action={formAction} className="flex flex-col gap-4 p-5">
-          <h2 id={titleId} className="text-lg font-semibold">
+        <form action={formAction} className="flex flex-col gap-4 p-6">
+          <h2 id={titleId} className="text-lg font-semibold tracking-tight">
             {title}
           </h2>
-          <div className="text-sm text-zinc-600 dark:text-zinc-300">
-            {children}
-          </div>
+          <div className="text-muted text-sm leading-relaxed">{children}</div>
           {state.error && (
             <p role="alert" className="text-sm text-red-600">
               {state.error}
             </p>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="mt-2 flex justify-end gap-2">
             <button
               type="button"
               autoFocus
               disabled={pending}
               onClick={() => dialog.current?.close()}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="btn btn-secondary"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="btn bg-red-600 text-white shadow-sm hover:bg-red-700"
             >
               {pending ? "Deleting…" : confirmLabel}
             </button>

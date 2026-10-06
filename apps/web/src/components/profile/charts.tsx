@@ -23,10 +23,10 @@ const tick = { fill: AXIS, fontSize: 11 };
 
 function TooltipBox({ title, lines }: { title: string; lines: string[] }) {
   return (
-    <div className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="border-line bg-surface rounded-md border px-2.5 py-1.5 text-xs shadow-sm">
       <p className="font-medium">{title}</p>
       {lines.map((l) => (
-        <p key={l} className="text-zinc-600 dark:text-zinc-400">
+        <p key={l} className="text-muted">
           {l}
         </p>
       ))}

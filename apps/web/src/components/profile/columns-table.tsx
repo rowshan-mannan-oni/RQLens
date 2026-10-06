@@ -112,9 +112,9 @@ export function ColumnsTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+    <div className="card overflow-x-auto">
       <table className="w-full text-sm">
-        <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+        <thead className="border-line bg-surface-2 text-muted border-b text-xs">
           <tr>
             {header("position", "#")}
             {header("name", "Column")}
@@ -127,24 +127,24 @@ export function ColumnsTable({
             {header("issues", "Issues")}
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+        <tbody className="divide-line divide-y">
           {sorted.map((r) => {
             const isOpen = open === r.column.name;
             return (
               <Fragment key={r.column.id}>
                 <tr
                   onClick={() => setOpen(isOpen ? null : r.column.name)}
-                  className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                  className="hover:bg-surface-2 cursor-pointer"
                   aria-expanded={isOpen}
                 >
-                  <td className="px-3 py-2 text-zinc-500 tabular-nums">
+                  <td className="text-subtle px-3 py-2 tabular-nums">
                     {r.position + 1}
                   </td>
                   <td className="px-3 py-2">
                     <span className="font-medium">
                       {r.column.original_name ?? r.column.name}
                     </span>
-                    <span className="ml-2 font-mono text-xs text-zinc-500">
+                    <span className="text-subtle ml-2 font-mono text-xs">
                       {r.column.physical_type.toLowerCase()}
                     </span>
                     {r.column.is_pii && (
@@ -177,10 +177,7 @@ export function ColumnsTable({
                 </tr>
                 {isOpen && r.profile && (
                   <tr>
-                    <td
-                      colSpan={7}
-                      className="bg-zinc-50/60 px-3 py-4 dark:bg-zinc-900/40"
-                    >
+                    <td colSpan={7} className="bg-surface-2 px-3 py-4">
                       <ColumnDetail
                         column={r.column}
                         profile={r.profile}
@@ -203,7 +200,7 @@ export function ColumnsTable({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs text-zinc-500">{label}</dt>
+      <dt className="text-subtle text-xs">{label}</dt>
       <dd className="font-medium tabular-nums">{value}</dd>
     </div>
   );
@@ -288,7 +285,7 @@ function ColumnDetail({
         datasetId={datasetId}
       />
       {column.is_pii && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted text-sm">
           Treated as personal data ({column.pii_reason}). Its values are never
           sent to the AI.
         </p>
@@ -316,7 +313,7 @@ function ColumnDetail({
       </dl>
       {p.numeric?.histogram && p.semantic_type !== "categorical" && (
         <figure>
-          <figcaption className="mb-1 text-xs text-zinc-500">
+          <figcaption className="text-subtle mb-1 text-xs">
             Distribution ({p.numeric.histogram.length} equal-width bins)
           </figcaption>
           <Histogram bins={p.numeric.histogram} total={p.numeric.finite} />
@@ -324,7 +321,7 @@ function ColumnDetail({
       )}
       {p.datetime && p.datetime.counts.length > 1 && (
         <figure>
-          <figcaption className="mb-1 text-xs text-zinc-500">
+          <figcaption className="text-subtle mb-1 text-xs">
             Rows per {p.datetime.period}
           </figcaption>
           <PeriodChart counts={p.datetime.counts} period={p.datetime.period} />
@@ -332,7 +329,7 @@ function ColumnDetail({
       )}
       {showTop && p.top_values && (
         <figure>
-          <figcaption className="mb-1 text-xs text-zinc-500">
+          <figcaption className="text-subtle mb-1 text-xs">
             Most common values (share of non-missing rows)
           </figcaption>
           <TopValuesChart values={p.top_values} />
@@ -340,7 +337,7 @@ function ColumnDetail({
       )}
       {p.text && p.semantic_type !== "categorical" && (
         <div>
-          <p className="text-xs text-zinc-500">Sample values</p>
+          <p className="text-subtle text-xs">Sample values</p>
           <ul className="mt-1 flex flex-col gap-1 text-sm">
             {p.text.samples.map((s) => (
               <li key={s} className="truncate font-mono text-xs">

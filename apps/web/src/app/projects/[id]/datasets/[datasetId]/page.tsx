@@ -1,3 +1,4 @@
+import { ArrowLeft, CircleCheck, FileSpreadsheet } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -59,7 +60,7 @@ export default async function DatasetProfilePage(
     : [];
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10">
+    <div className="flex flex-col gap-8">
       <AutoRefresh
         active={
           dataset.describe_status === "pending" ||
@@ -70,17 +71,24 @@ export default async function DatasetProfilePage(
       <div>
         <Link
           href={`/projects/${id}`}
-          className="text-sm text-zinc-500 hover:underline"
+          className="text-subtle hover:text-fg inline-flex items-center gap-1 text-xs"
         >
-          ← Project
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          All datasets
         </Link>
         <div className="mt-2 flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {dataset.original_filename}
-          </h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="bg-brand-soft text-brand-fg grid h-10 w-10 shrink-0 place-items-center rounded-xl">
+              <FileSpreadsheet className="h-5 w-5" aria-hidden />
+            </span>
+            <h2 className="truncate text-xl font-semibold tracking-tight">
+              {dataset.original_filename}
+            </h2>
+          </div>
           {dataset.status === "ready" || dataset.status === "failed" ? (
             <ConfirmDialog
               triggerLabel="Delete dataset"
+              triggerClassName="btn btn-sm btn-danger"
               title={`Delete ${dataset.original_filename}?`}
               confirmLabel="Delete dataset"
               action={deleteDataset.bind(
@@ -98,7 +106,7 @@ export default async function DatasetProfilePage(
             </ConfirmDialog>
           ) : null}
         </div>
-        <p className="text-sm text-zinc-500">
+        <p className="lead mt-2 max-w-3xl">
           Profile of table <code>{dataset.table_name}</code>. Every number on
           this page comes from a SQL query over the data; associations use a
           fixed sample on large tables.
@@ -106,20 +114,17 @@ export default async function DatasetProfilePage(
       </div>
 
       {dataset.status !== "ready" ? (
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted">
           This dataset is {dataset.status}. The profile appears when it is
           ready.
         </p>
       ) : (
         <>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
             {tiles.map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-              >
-                <dt className="text-xs text-zinc-500">{label}</dt>
-                <dd className="mt-1 truncate text-lg font-semibold tabular-nums">
+              <div key={label} className="card p-4">
+                <dt className="text-muted text-xs font-medium">{label}</dt>
+                <dd className="mt-1 truncate text-xl font-semibold tracking-tight tabular-nums">
                   {value}
                 </dd>
               </div>
@@ -128,7 +133,7 @@ export default async function DatasetProfilePage(
 
           <section className="flex flex-col gap-3">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-medium">Warnings</h2>
+              <h2 className="section-title">Warnings</h2>
               {SEVERITY_ORDER.map((s) => {
                 const n = warnings.filter((w) => w.severity === s).length;
                 return n ? (
@@ -137,7 +142,10 @@ export default async function DatasetProfilePage(
               })}
             </div>
             {warnings.length === 0 ? (
-              <p className="text-zinc-600 dark:text-zinc-400">No warnings.</p>
+              <p className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300">
+                <CircleCheck className="h-4 w-4" aria-hidden />
+                No data-quality warnings for this table.
+              </p>
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {[...warnings]
@@ -178,9 +186,9 @@ export default async function DatasetProfilePage(
           )}
 
           <section className="flex flex-col gap-3">
-            <h2 className="font-medium">
+            <h2 className="section-title">
               Columns{" "}
-              <span className="text-sm font-normal text-zinc-500">
+              <span className="text-subtle text-sm font-normal">
                 (click a row for details; click a header to sort)
               </span>
             </h2>
@@ -202,7 +210,7 @@ export default async function DatasetProfilePage(
           </section>
         </>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -217,7 +225,7 @@ function DescribeStatus({
 }) {
   if (status === "pending" || status === "running") {
     return (
-      <p className="animate-pulse text-sm text-zinc-600 dark:text-zinc-400">
+      <p className="text-muted animate-pulse text-sm">
         Writing column descriptions with AI…
       </p>
     );

@@ -1,3 +1,4 @@
+import { MessageSquare, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -34,29 +35,29 @@ export default async function ChatPage(
   const ready = datasets.filter((d) => d.status === "ready");
 
   return (
-    <main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 md:grid-cols-[14rem_minmax(0,1fr)]">
-      <aside className="flex flex-col gap-3 text-sm">
-        <Link
-          href={`/projects/${project.id}`}
-          className="text-zinc-500 hover:underline"
-        >
-          ← {project.title}
-        </Link>
+    <div className="grid gap-6 md:grid-cols-[15rem_minmax(0,1fr)]">
+      <aside className="flex flex-col gap-3 text-sm md:sticky md:top-20 md:self-start">
         <form action={createChat.bind(null, project.id)}>
-          <button className="w-full rounded-md border border-zinc-300 px-3 py-1.5 text-left font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
-            + New chat
+          <button className="btn btn-secondary w-full justify-start">
+            <Plus className="h-4 w-4" aria-hidden />
+            New chat
           </button>
         </form>
-        <nav aria-label="Chats">
-          <ul className="flex max-h-48 flex-col gap-0.5 overflow-y-auto md:max-h-none">
+        <nav aria-label="Chats" className="flex flex-col gap-1">
+          <p className="eyebrow px-2 pt-2 pb-1">Recent</p>
+          <ul className="flex max-h-48 flex-col gap-0.5 overflow-y-auto md:max-h-[60vh]">
             {chats.map((c) => (
               <li key={c.id}>
                 <Link
                   href={`/projects/${project.id}/chat/${c.id}`}
                   aria-current={c.id === detail.chat.id ? "page" : undefined}
-                  className="block truncate rounded-md px-2 py-1 hover:bg-zinc-100 aria-[current=page]:bg-zinc-100 aria-[current=page]:font-medium dark:hover:bg-zinc-800 dark:aria-[current=page]:bg-zinc-800"
+                  className="text-muted hover:bg-surface-3 hover:text-fg aria-[current=page]:bg-brand-soft aria-[current=page]:text-brand-fg flex items-center gap-2 truncate rounded-lg px-2 py-1.5 transition-colors aria-[current=page]:font-medium"
                 >
-                  {c.title}
+                  <MessageSquare
+                    className="h-3.5 w-3.5 shrink-0 opacity-70"
+                    aria-hidden
+                  />
+                  <span className="truncate">{c.title}</span>
                 </Link>
               </li>
             ))}
@@ -64,37 +65,49 @@ export default async function ChatPage(
         </nav>
       </aside>
 
-      <section className="flex min-w-0 flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
+      <section className="card flex min-w-0 flex-col">
+        <header className="border-line flex items-start justify-between gap-4 border-b px-5 py-4">
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">
+            <h2 className="truncate font-semibold tracking-tight">
               {detail.chat.title}
-            </h1>
-            <p className="text-xs text-zinc-500">
-              {ready.length === 0
-                ? "No datasets are ready yet."
-                : `Tables: ${ready.map((d) => d.table_name).join(", ")}`}
-              {" · "}The AI sees the schema, column statistics,
-              {project.share_samples ? " masked example values" : ""} and up to
-              50 rows of each query result; personal-data columns are masked.
+            </h2>
+            <p className="text-subtle mt-0.5 flex items-start gap-1.5 text-xs">
+              <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span>
+                {ready.length === 0
+                  ? "No datasets are ready yet."
+                  : `Tables: ${ready.map((d) => d.table_name).join(", ")}. `}
+                The AI sees the schema, column statistics
+                {project.share_samples ? ", masked example values" : ""} and up
+                to 50 rows of each query result; personal-data columns are
+                masked.
+              </span>
             </p>
           </div>
           <ConfirmDialog
-            triggerLabel="Delete chat"
+            triggerLabel={
+              <>
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                <span className="sr-only sm:not-sr-only">Delete</span>
+              </>
+            }
+            triggerClassName="btn btn-sm btn-ghost"
             title={`Delete the chat “${detail.chat.title}”?`}
             confirmLabel="Delete chat"
             action={deleteChat.bind(null, project.id, detail.chat.id)}
           >
             <p>The questions and answers in this chat are removed.</p>
           </ConfirmDialog>
+        </header>
+        <div className="p-5">
+          <ChatView
+            key={detail.chat.id}
+            projectId={project.id}
+            chatId={detail.chat.id}
+            initialMessages={detail.messages}
+          />
         </div>
-        <ChatView
-          key={detail.chat.id}
-          projectId={project.id}
-          chatId={detail.chat.id}
-          initialMessages={detail.messages}
-        />
       </section>
-    </main>
+    </div>
   );
 }

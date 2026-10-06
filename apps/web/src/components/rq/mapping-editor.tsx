@@ -39,7 +39,7 @@ export function MappingEditor({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-fit rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        className="btn btn-secondary btn-sm w-fit"
       >
         Edit mapping
       </button>
@@ -57,7 +57,7 @@ export function MappingEditor({
 
   return (
     <form
-      className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 text-sm dark:border-zinc-800"
+      className="border-line flex flex-col gap-3 rounded-md border p-3 text-sm"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -71,8 +71,7 @@ export function MappingEditor({
       {mapping.constructs.map((c, i) => (
         <fieldset key={c.name} className="flex flex-col gap-1">
           <legend className="font-medium">
-            {c.name}{" "}
-            <span className="font-normal text-zinc-500">({c.role})</span>
+            {c.name} <span className="text-subtle font-normal">({c.role})</span>
           </legend>
           <div className="flex flex-wrap gap-2">
             <select
@@ -81,7 +80,7 @@ export function MappingEditor({
               onChange={(e) =>
                 setChoice(choice.map((v, j) => (j === i ? e.target.value : v)))
               }
-              className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
+              className="border-line-strong bg-surface min-w-0 flex-1 rounded-md border px-2 py-1"
             >
               {c.candidates.map((cand, k) => (
                 <option key={k} value={`cand:${k}`}>
@@ -112,7 +111,7 @@ export function MappingEditor({
                     ),
                   )
                 }
-                className="rounded-md border border-zinc-300 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
+                className="border-line-strong bg-surface rounded-md border px-2 py-1"
               >
                 <option value="direct">direct</option>
                 <option value="proxy">proxy</option>
@@ -124,7 +123,7 @@ export function MappingEditor({
       <label className="flex flex-col gap-1">
         <span className="font-medium">
           Population filter{" "}
-          <span className="font-normal text-zinc-500">
+          <span className="text-subtle font-normal">
             (SQL condition, empty for all rows)
           </span>
         </span>
@@ -132,7 +131,7 @@ export function MappingEditor({
           value={population}
           onChange={(e) => setPopulation(e.target.value)}
           placeholder={`species = 'Gentoo'`}
-          className="rounded-md border border-zinc-300 bg-white px-2 py-1 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
+          className="border-line-strong bg-surface rounded-md border px-2 py-1 font-mono text-xs"
         />
       </label>
       {error && (
@@ -141,16 +140,13 @@ export function MappingEditor({
         </p>
       )}
       <div className="flex gap-2">
-        <button
-          disabled={pending}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-        >
+        <button disabled={pending} className="btn btn-primary btn-sm">
           {pending ? "Saving…" : "Save and re-assess"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs dark:border-zinc-700"
+          className="border-line-strong rounded-md border px-3 py-1.5 text-xs"
         >
           Cancel
         </button>
