@@ -10,11 +10,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from api.config import get_settings
-from api.db.models import Paper, Passage
+from api.db.models import Paper, Passage, ReferenceEntry
 from api.limits import enforce_paper_limit
+from api.papers.references import apply_to_paper, match, parse_references
 from api.routes.deps import OwnedProject, Queue, Session
 from api.storage import paper_path, papers_dir
 
@@ -41,6 +42,7 @@ class PaperOut(BaseModel):
     doi: str | None
     metadata_source_json: dict[str, str] | None
     ocr_pages_json: list[int] | None
+    cite_key: str | None
     created_at: datetime
 
 
@@ -134,6 +136,108 @@ async def upload_paper(
     await session.refresh(paper)
     await queue.enqueue_job("parse_paper", paper.id)
     return PaperOut.model_validate(paper)
+
+
+class ReferenceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    cite_key: str
+    kind: str | None
+    title: str | None
+    authors_json: list[str] | None
+    year: int | None
+    venue: str | None
+    doi: str | None
+    files_json: list[str] | None
+    paper_id: int | None
+
+
+class ReferenceImport(BaseModel):
+    entries: int
+    matched: int
+    updated_papers: int
+    unmatched: list[ReferenceOut]
+
+
+MAX_REFERENCE_BYTES = 10 * 1024 * 1024
+
+
+@router.post("/references")
+async def import_references(
+    project: OwnedProject, session: Session, file: UploadFile
+) -> ReferenceImport:
+    """Import a BibTeX or RIS file (as exported by Zotero, Mendeley or EndNote). Entries are
+    matched to papers by DOI, then title, and give them their metadata and citation key.
+    Entries without a paper yet are kept and matched when their PDF is uploaded."""
+    filename = Path(file.filename or "").name.lower()
+    if not filename.endswith((".bib", ".bibtex", ".ris", ".txt")):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Upload a .bib or .ris file")
+    data = await file.read(MAX_REFERENCE_BYTES + 1)
+    if len(data) > MAX_REFERENCE_BYTES:
+        raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, "The file is larger than 10 MB")
+    text = data.decode("utf-8", errors="replace").lstrip("\ufeff")
+    refs = parse_references(text, filename)
+    if not refs:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No references were found in the file")
+
+    papers = list(
+        await session.scalars(
+            select(Paper).where(Paper.project_id == project.id, Paper.status != "failed")
+        )
+    )
+    existing = {
+        e.cite_key: e
+        for e in await session.scalars(
+            select(ReferenceEntry).where(ReferenceEntry.project_id == project.id)
+        )
+    }
+    entries = []
+    for ref in refs:
+        entry = existing.get(ref.key[:200]) or ReferenceEntry(
+            project_id=project.id, cite_key=ref.key[:200]
+        )
+        entry.kind, entry.title, entry.authors_json = ref.kind[:40], ref.title, ref.authors or None
+        entry.year, entry.venue, entry.doi = ref.year, ref.venue, ref.doi
+        entry.files_json = ref.files or None
+        if entry.id is None:
+            session.add(entry)
+            existing[entry.cite_key] = entry
+        entries.append(entry)
+
+    updated = set()
+    for entry in entries:
+        paper = match(entry, papers)
+        entry.paper_id = paper.id if paper is not None else None
+        if paper is not None and apply_to_paper(paper, entry):
+            updated.add(paper.id)
+    await session.commit()
+    unmatched = [e for e in entries if e.paper_id is None]
+    for e in unmatched:
+        await session.refresh(e)
+    return ReferenceImport(
+        entries=len(entries),
+        matched=len(entries) - len(unmatched),
+        updated_papers=len(updated),
+        unmatched=[ReferenceOut.model_validate(e) for e in unmatched],
+    )
+
+
+@router.get("/references")
+async def list_references(project: OwnedProject, session: Session) -> list[ReferenceOut]:
+    rows = await session.scalars(
+        select(ReferenceEntry)
+        .where(ReferenceEntry.project_id == project.id)
+        .order_by(ReferenceEntry.paper_id.is_not(None), ReferenceEntry.cite_key)
+    )
+    return [ReferenceOut.model_validate(e) for e in rows]
+
+
+@router.delete("/references", status_code=status.HTTP_204_NO_CONTENT)
+async def clear_references(project: OwnedProject, session: Session) -> None:
+    """Forget imported entries. Metadata already copied to papers stays."""
+    await session.execute(delete(ReferenceEntry).where(ReferenceEntry.project_id == project.id))
+    await session.commit()
 
 
 def _save(file: UploadFile, path: Path, limit: int) -> tuple[int, str, bytes]:

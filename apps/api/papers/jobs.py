@@ -3,15 +3,17 @@
 import asyncio
 import logging
 from functools import partial
+from types import SimpleNamespace
 from typing import Any
 
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from api.config import get_settings
-from api.db.models import Paper, Passage
+from api.db.models import Paper, Passage, ReferenceEntry
 from api.db.session import get_sessionmaker
 from api.papers import ocr
 from api.papers.parser import ParsedPaper, parse_pdf
+from api.papers.references import apply_to_paper, match
 from api.storage import paper_path
 
 log = logging.getLogger(__name__)
@@ -50,6 +52,7 @@ async def parse_paper(ctx: dict[str, Any], paper_id: int) -> str:
         await session.execute(delete(Passage).where(Passage.paper_id == paper_id))
         session.add_all(_passages(paper_id, parsed))
         _store(paper, parsed)
+        await _match_reference(session, paper)
         await session.commit()
         status = paper.status
 
@@ -123,3 +126,21 @@ def _store(paper: Paper, parsed: ParsedPaper) -> None:
                 f"{'All pages were' if n == parsed.page_count else f'{n} scanned page(s) were'} "
                 "read with OCR. Check quotes against the page: OCR can misread characters."
             )
+
+
+async def _match_reference(session: Any, paper: Paper) -> None:
+    """Give a newly read paper the metadata of an imported reference entry that describes it."""
+    entries = list(
+        await session.scalars(
+            select(ReferenceEntry).where(
+                ReferenceEntry.project_id == paper.project_id,
+                (ReferenceEntry.paper_id.is_(None)) | (ReferenceEntry.paper_id == paper.id),
+            )
+        )
+    )
+    for entry in entries:
+        ref = SimpleNamespace(doi=entry.doi, title=entry.title)
+        if match(ref, [paper]) is paper:
+            entry.paper_id = paper.id
+            apply_to_paper(paper, entry)
+            return

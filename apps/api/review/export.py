@@ -193,7 +193,7 @@ def to_bibtex(papers: list[dict[str, Any]]) -> str:
              if len(w) > 3),
             "paper",
         )  # fmt: skip
-        key = base = f"{surname.lower()}{p.get('year') or ''}{word.lower()}"
+        key = base = p.get("cite_key") or f"{surname.lower()}{p.get('year') or ''}{word.lower()}"
         n = 2
         while key in used:
             key, n = f"{base}{chr(ord('a') + n - 2)}", n + 1

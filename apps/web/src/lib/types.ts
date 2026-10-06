@@ -508,6 +508,7 @@ export type Paper = {
   doi: string | null;
   metadata_source_json: Record<string, string> | null;
   ocr_pages_json: number[] | null;
+  cite_key: string | null;
   created_at: string;
 };
 
@@ -601,4 +602,17 @@ export type RelatedPapers = {
     matched_terms: string[];
     cells: { column_key: string; terms: string[] }[];
   }[];
+};
+
+export type ReferenceEntry = {
+  id: number;
+  cite_key: string;
+  kind: string | null;
+  title: string | null;
+  authors_json: string[] | null;
+  year: number | null;
+  venue: string | null;
+  doi: string | null;
+  files_json: string[] | null;
+  paper_id: number | null;
 };

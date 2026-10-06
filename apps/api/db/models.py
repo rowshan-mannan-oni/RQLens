@@ -248,6 +248,7 @@ class Paper(TimestampMixin, Base):
     metadata_source_json: Mapped[Json | None]  # field -> pdf_metadata | first_page | user
     sections_json: Mapped[Json | None]
     ocr_pages_json: Mapped[Json | None]  # pages whose text was read with OCR
+    cite_key: Mapped[str | None] = mapped_column(String(200))  # from an imported reference file
 
 
 class Passage(Base):
@@ -265,6 +266,26 @@ class Passage(Base):
     kind: Mapped[str] = mapped_column(String(16))  # sentence | caption | reference
     text: Mapped[str] = mapped_column(Text)
     rects_json: Mapped[Json]  # [[x0, y0, x1, y1], ...], one per line, top-left origin
+
+
+class ReferenceEntry(TimestampMixin, Base):
+    """An entry of an imported BibTeX or RIS file. Matched to a paper by DOI or title, now or
+    when its PDF is uploaded later."""
+
+    __tablename__ = "reference_entries"
+    __table_args__ = (UniqueConstraint("project_id", "cite_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = fk("projects.id")
+    cite_key: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str | None] = mapped_column(String(40))
+    title: Mapped[str | None] = mapped_column(Text)
+    authors_json: Mapped[Json | None]
+    year: Mapped[int | None]
+    venue: Mapped[str | None] = mapped_column(Text)
+    doi: Mapped[str | None] = mapped_column(String(300))
+    files_json: Mapped[Json | None]  # PDF file names listed in the export
+    paper_id: Mapped[int | None] = fk("papers.id", nullable=True, on_delete="SET NULL")
 
 
 class ReviewTemplate(TimestampMixin, Base):
