@@ -393,3 +393,60 @@ export type ResearchQuestions = {
   suggestions_status: "running" | "done" | "failed" | null;
   suggestions_error: string | null;
 };
+
+// Insights (apps/api/routes/insights.py)
+
+export type InsightStatus = "finding" | "weak" | "no_evidence" | "data_quality";
+
+export type ConfounderCheck = {
+  column: string;
+  verdict: "holds" | "weakens" | "reverses";
+  strata: { value: string; n: number; effect: number }[];
+};
+
+export type Insight = {
+  id: number;
+  rq_id: number | null;
+  kind: "analysis" | "data_quality";
+  status: InsightStatus | null;
+  title: string;
+  statement: string;
+  effect_size: number | null;
+  p_value: number | null;
+  p_adjusted: number | null;
+  score: number | null;
+  result: {
+    test?: string;
+    effect_size_name?: string;
+    n?: number;
+    magnitude?: string;
+    confounders?: ConfounderCheck[];
+  } | null;
+  chart: ChartSpec | null;
+  caveats: string[];
+  spec: {
+    table: string;
+    test: string;
+    x: string;
+    y: string;
+    where: string | null;
+    source: string;
+  } | null;
+  grounding: { ok: boolean; checked: number; unsupported: string[] } | null;
+  written_by: "template" | "llm" | null;
+  queries: RQQuery[];
+};
+
+export type InsightRun = {
+  id: number;
+  status: "queued" | "running" | "done" | "failed";
+  error: string | null;
+  planned: number | null;
+  failed_json: string[] | null;
+  dropped_json: string[] | null;
+  used_llm: boolean;
+  config_version: string | null;
+  created_at: string;
+};
+
+export type Insights = { run: InsightRun | null; insights: Insight[] };

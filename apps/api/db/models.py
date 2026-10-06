@@ -176,11 +176,34 @@ class RQAssessment(TimestampMixin, Base):
     problems_json: Mapped[Json | None]  # mapping fixes and failed checks
 
 
+class InsightRun(TimestampMixin, Base):
+    """One generation of a project's insights; the newest finished run is shown."""
+
+    __tablename__ = "insight_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = fk("projects.id")
+    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued|running|done|failed
+    error: Mapped[str | None] = mapped_column(Text)
+    planned: Mapped[int | None]
+    failed_json: Mapped[Json | None]  # analyses that could not run, with the reason
+    dropped_json: Mapped[Json | None]  # planned analyses rejected by validation
+    used_llm: Mapped[bool] = mapped_column(default=False, server_default="false")
+    config_version: Mapped[str | None] = mapped_column(String(120))
+
+
 class Insight(TimestampMixin, Base):
     __tablename__ = "insights"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     project_id: Mapped[int] = fk("projects.id")
+    run_id: Mapped[int | None] = fk("insight_runs.id", nullable=True)
+    # finding | weak | no_evidence | data_quality
+    status: Mapped[str | None] = mapped_column(String(16))
+    spec_json: Mapped[Json | None]
+    query_ids_json: Mapped[Json | None]
+    grounding_json: Mapped[Json | None]
+    written_by: Mapped[str | None] = mapped_column(String(16))  # template | llm
     rq_id: Mapped[int | None] = fk("research_questions.id", nullable=True, on_delete="SET NULL")
     title: Mapped[str] = mapped_column(String(300))
     statement: Mapped[str] = mapped_column(Text)
