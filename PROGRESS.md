@@ -11,7 +11,7 @@ Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not sta
 | 0. Setup | Done |
 | 1. Ingestion and profiling | Done; all development datasets load and profile |
 | 2. Semantic layer and chat | Built and tested; waiting on a first run with a real model against the 31 questions |
-| 3. RQ fit analysis | Not started |
+| 3. RQ fit analysis | Done; waiting on a first run with a real model and on review of the verdict rules |
 | 4. Insights | Not started |
 | 5. Evaluation | Harness and first 31 chat questions in place; benchmarks not run |
 | 6. Export, polish, deployment | Project deletion done early; rest not started |
@@ -110,12 +110,22 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 ## Phase 3: RQ fit analysis
 
-- [ ] Parse each RQ into a structured form (type, population, constructs, comparison, time scope).
-- [ ] Map constructs to columns (direct, proxy, derivable) and mark gaps; user can accept, change or reject mappings.
-- [ ] Feasibility checks with queries: rows after filters, missingness, group sizes, outcome variance, time coverage, rough power check, causal caveats.
-- [ ] Rule-based verdict (answerable, partial, not answerable) with LLM-written explanation, evidence linked to queries, suggested method, threats, and a reworded RQ.
-- [ ] Suggest additional RQs the data supports.
-- [ ] RQ Fit page with one card per RQ; editing re-runs the assessment.
+The verdict rules are written down in `DECISIONS.md`. Plan section 13 asks you to design and review these yourself, so treat them as a draft.
+
+- [x] Research questions in a project: add, edit, delete and reorder (API); add, delete and reword on the RQ Fit page. At most 20 per project.
+- [x] Parse each RQ (LLM, structured output) into type, population, constructs with roles, comparison and time scope (`rq/mapper.py`, prompt `rq_parse.v1`).
+- [x] Map constructs to columns (`rq_map.v1`), with match types direct, proxy or derivable (a guarded SQL expression), a justification, a population filter and a time scope. Everything is validated: unknown columns are dropped, and expressions and filters must pass the SQL guard. Wide tables show the mapper only the most relevant columns. The user can accept, change or reject each mapping, and edit the population filter; a change re-runs the later steps without re-mapping.
+- [x] Feasibility checks, each a logged query linked as evidence (`rq/feasibility.py`): rows in scope, missing values, complete cases, outcome variation, group sizes (and groups whose outcome never varies), time coverage, a rough power check (minimum detectable d, r or margin), a causal caveat, and possible confounders from the profile's associations. v1 checks one table.
+- [x] Rule-based verdict (`rq/verdict.py`, pure and unit-tested). The LLM writes the explanation, method, threats and rewording (`rq_explain.v1`); the grounding check applies, and if the LLM is unavailable the rule messages are used, so a verdict is never lost.
+- [x] Suggest additional RQs the data supports (`rq_suggest.v1`); suggestions naming columns that don't exist are dropped.
+- [x] RQ Fit page with one card per question: verdict badge, explanation, rewording with "Use this wording", mapping table and editor, evidence with each query's SQL and result, threats, method, and buttons to re-assess, map again or delete. Checked in a browser at desktop and phone widths and in dark mode.
+
+**Done when:** assessments run end to end on 10 dataset-and-RQ pairs, including at least 3 RQs known to be unanswerable. ✅ Met for the measuring and verdict steps:
+
+- 13 labelled pairs in `evals/rq_fit/cases.v1.jsonl`, 4 of them unanswerable, run end to end on real data with labelled mappings: `run_eval.py rq --gold-mapping` gives 13 of 13.
+- One rule was added after a disagreement, so that score is not an unbiased accuracy (see `DECISIONS.md`).
+- The full app flow (API, worker, Postgres, Redis, web page) was run against a scripted model server.
+- ⚠️ Parsing, mapping and explaining have **not been run with a real model yet** (no API key available).
 
 ## Phase 4: Insights
 
@@ -131,7 +141,7 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 - [~] A. Chat accuracy: 120 to 150 questions with gold SQL across 8 datasets; execution-match scoring. Scoring and the runner (`evals/run_eval.py`, `evals/scoring.py`) are done and unit-tested; there are 31 of the 120 to 150 questions.
 - [ ] B. Planted-issue detection: injector scripts, at least 100 cases, false alarms on clean data. (The profiler already has planted-issue unit tests to build on.)
-- [ ] C. RQ verdict agreement: 60 hand-labelled dataset and RQ pairs, second labeller on 20.
+- [~] C. RQ verdict agreement: 60 hand-labelled dataset and RQ pairs, second labeller on 20. The runner, confusion matrix and mapping precision and recall are done; there are 13 development cases (not reviewed by hand).
 - [ ] Experiments 1 to 6, LLM response cache, bootstrap confidence intervals. (`run_eval.py --no-retrieval` covers experiment 6's switch.)
 - [ ] CI smoke eval (15 questions per pull request).
 - [ ] Error analysis of 30 failures.
@@ -159,10 +169,10 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 | Level | Status |
 |---|---|
-| Unit | ✅ 160 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg |
+| Unit | ✅ 191 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model) |
 | Integration | ⚠️ The oracle eval test runs the real loader, profiler, agent loop, guard and executor on real datasets. The full API (Postgres, Redis, worker, streaming chat) was checked with a manual script, not an automated test |
 | Security | ⚠️ Malicious SQL tested; prompt injection through column names and cell values, and oversized uploads, not yet tested |
-| End to end (Playwright) | ❌ Not started |
+| End to end (Playwright) | ⚠️ The RQ Fit page was driven with Playwright by hand (load, edit mapping, save, rejected filter); no automated suite yet |
 | Eval | ⚠️ Harness ready and self-tested; no real-model run yet |
 
 ## Known gaps and follow-ups
@@ -170,7 +180,6 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 - The Gemini free tier often answers 429 or 503; description jobs retry automatically (after 30, 60 and 90 s).
 - The CI workflow has never run (no remote); pre-commit hooks are not installed.
 - Uploads are spooled to a temporary file by the multipart parser before the size check.
-- `DECISIONS.md` (one line per design choice, suggested in plan section 13) has not been started.
 - The development database contains test data under `smoke@example.com`.
 - The 31 gold answers need checking by hand before any accuracy number is reported.
 - The CI smoke eval (15 questions, `run_eval.py --smoke`) needs an `LLM_API_KEY` secret in GitHub before it can run in CI.

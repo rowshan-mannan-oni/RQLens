@@ -87,6 +87,12 @@ def test_each_rule(overrides: dict[str, Any], rule: str, verdict: str) -> None:
     assert decide(apply_rules(m)) == verdict
 
 
+def test_group_with_a_constant_outcome() -> None:
+    m = base(constant_groups=["cash"])
+    assert fired(m) == {"group_constant_outcome": "warn"}
+    assert "cash" in apply_rules(m)[0].message
+
+
 def test_mapping_rules() -> None:
     m = base(
         constructs=[
@@ -283,7 +289,9 @@ async def test_derived_construct_and_proxy(project: Any) -> None:
     report, rules, verdict = await run_case(project, parsed, mapping)
     names = [g for g, _ in report.measurements.groups or []]
     assert names == ["credit card", "cash"]
-    assert "proxy_only" in rules and verdict == "partial"
+    # Cash tips are not recorded: the tip share is 0 for every cash trip.
+    assert report.measurements.constant_groups == ["cash"]
+    assert {"proxy_only", "group_constant_outcome"} <= rules and verdict == "partial"
 
 
 async def test_broken_expression_becomes_a_gap(project: Any) -> None:

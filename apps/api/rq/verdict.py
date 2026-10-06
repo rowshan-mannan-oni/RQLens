@@ -47,6 +47,7 @@ class Measurements:
     complete_cases: int | None = None
     needs_groups: bool = False
     groups: list[tuple[str, int]] | None = None  # complete rows per group, largest first
+    constant_groups: list[str] = field(default_factory=list)  # groups whose outcome never varies
     correlational: bool = False  # numeric explanatory variable
     outcome_distinct: int | None = None
     outcome_top_share: float | None = None
@@ -197,6 +198,17 @@ def apply_rules(m: Measurements) -> list[RuleResult]:
                     largest=largest,
                     smallest=smallest,
                 )
+
+    if m.constant_groups and m.needs_groups:
+        names = ", ".join(f"“{g}”" for g in m.constant_groups[:5])
+        fire(
+            "group_constant_outcome",
+            "warn",
+            f"The outcome never varies within {names}. It may not be recorded for "
+            "that group, which would make the comparison an artefact.",
+            "groups",
+            groups=m.constant_groups,
+        )
 
     # Time
     if m.time_coverage is not None:

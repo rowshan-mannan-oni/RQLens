@@ -282,3 +282,114 @@ export type ChatEvent =
   | { type: "status"; text: string }
   | { type: "step"; step: AgentStep }
   | { type: "done"; message: ChatMessage };
+
+// Research-question fit (apps/api/routes/rqs.py, apps/api/rq/schemas.py)
+
+export type Verdict = "answerable" | "partial" | "not_answerable";
+export type RuleLevel = "fail" | "warn" | "info" | "pass";
+export type Role = "dependent" | "independent" | "covariate";
+export type MatchType = "direct" | "proxy" | "derivable";
+
+export type Candidate = {
+  table: string;
+  column: string | null;
+  expression: string | null;
+  match: MatchType;
+  kind: string | null;
+  justification: string;
+};
+
+export type MappedConstruct = {
+  name: string;
+  role: Role;
+  candidates: Candidate[];
+  status: "proposed" | "confirmed" | "rejected";
+};
+
+export type RQMapping = {
+  constructs: MappedConstruct[];
+  population_filter: string | null;
+  time_column: string | null;
+  time_start: string | null;
+  time_end: string | null;
+  notes: string;
+};
+
+export type RQParsed = {
+  type:
+    "descriptive" | "comparative" | "correlational" | "predictive" | "causal";
+  population: string;
+  constructs: { name: string; role: Role; description: string }[];
+  comparison: string | null;
+  time_scope: string | null;
+};
+
+export type RuleResult = {
+  rule: string;
+  level: RuleLevel;
+  message: string;
+  query_id: number | null;
+};
+
+export type RQFact = { fact: string; message: string; query_id: number | null };
+
+export type RQQuery = {
+  id: number;
+  sql: string;
+  row_count: number | null;
+  duration_ms: number | null;
+  error: string | null;
+  result_preview_json: { columns: string[]; rows: unknown[][] } | null;
+};
+
+export type RQAssessment = {
+  id: number;
+  verdict: Verdict;
+  explanation: string | null;
+  rewording: string | null;
+  suggested_method: string | null;
+  threats: string[];
+  rules: RuleResult[];
+  facts: RQFact[];
+  gaps: { construct: string; role: Role }[];
+  problems: string[];
+  grounding: { ok: boolean; checked: number; unsupported: string[] } | null;
+  explained_by: "llm" | "rules" | null;
+  config_version: string;
+  created_at: string;
+  queries: RQQuery[];
+};
+
+export type ResearchQuestion = {
+  id: number;
+  text: string;
+  position: number;
+  status: "queued" | "running" | "done" | "failed";
+  error: string | null;
+  parsed: RQParsed | null;
+  mapping: RQMapping | null;
+  assessment: RQAssessment | null;
+  created_at: string;
+};
+
+export type RQSuggestion = {
+  text: string;
+  type: string;
+  columns: string[];
+  reason: string;
+};
+
+export type ColumnOption = {
+  table: string;
+  column: string;
+  label: string;
+  type: string | null;
+};
+
+export type ResearchQuestions = {
+  questions: ResearchQuestion[];
+  columns: ColumnOption[];
+  suggestions: RQSuggestion[] | null;
+  suggestions_status: "running" | "done" | "failed" | null;
+  suggestions_error: string | null;
+};

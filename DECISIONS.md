@@ -57,8 +57,9 @@ The verdict is the worst level among the rules that fire:
 | `small_group` | warn | The smallest group has fewer than 20 complete rows |
 | `unbalanced_groups` | warn | The largest group is more than 10 times the smallest |
 | `outcome_near_constant` | warn | One outcome value covers 95% or more of the rows in scope |
+| `group_constant_outcome` | warn | The outcome never varies within one group, a sign it is not recorded for that group (for example, cash tips in taxi data) |
 | `partial_time_coverage` | warn | The data covers less than 80% of the requested period |
-| `low_power` | warn | The smallest detectable effect at α = 0.05 and 80% power is large: Cohen's d above 0.8 for two groups, r above 0.5 for a correlation, or a margin of error above 0.1 (proportion, or SD units) for a descriptive question |
+| `low_power` | warn | The smallest detectable effect at α = 0.05 and 80% power is large: Cohen's d above 0.8 for two groups, r above 0.5 for a correlation, or a margin of error above 0.1 (for a proportion) for a descriptive question |
 | `causal_claim` | warn | The question is causal: observational data supports association only |
 | `multi_table` | warn | Constructs are mapped to more than one table (v1 checks one table) |
 | `confounders` | info | Columns associated with both the outcome and the explanatory variable (from the profile), listed as possible confounders |
@@ -73,3 +74,12 @@ Notes on the rules:
   It is a rough check and is labelled as one.
 - **Causal questions are at most partial.** No check can rule out confounding in observational data, so a causal question is never "answerable" as worded. The rewording suggests the associational version.
 - **Thresholds** (10, 30, 30%, 5, 20, 10×, 95%, 80%, 0.8, 0.5, 0.1) are conventional starting points, not tuned values. Benchmark C (60 hand-labelled pairs) is where they get checked.
+
+### Changes after the first benchmark run
+
+- `group_constant_outcome` was added after `taxis-tip-payment` disagreed with its label: every cash trip had a tip of 0 because cash tips are not recorded. The rule generalises (an outcome that never varies within a group is usually missing for that group). Because it was added after seeing that case, the 13 development cases are no longer an unbiased test of the rules. Report agreement only on cases labelled after this change.
+
+### Mapping and checks
+
+- A numeric explanatory column with at most 20 distinct values counts as groups only for comparative questions. Otherwise it is treated as a correlation. The profiler already types low-cardinality integers such as `pclass` as categorical.
+- Each check is a separate small query rather than one large query, so each piece of evidence links to exactly the query that produced it.

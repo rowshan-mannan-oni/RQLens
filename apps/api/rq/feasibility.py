@@ -235,13 +235,22 @@ async def measure(
     grouping = _grouping(parsed, local, table)
     if grouping is not None:
         m.needs_groups = True
+        outcome_distinct = (
+            f"count(DISTINCT {outcome.expression})"
+            if outcome and outcome.expression and outcome is not grouping
+            else "NULL"
+        )
         groups = await run(
             "groups",
-            f"SELECT CAST({grouping.expression} AS VARCHAR) AS grp, count(*) AS n FROM {t} "
+            f"SELECT CAST({grouping.expression} AS VARCHAR) AS grp, count(*) AS n, "
+            f"{outcome_distinct} AS outcome_values FROM {t} "
             f"WHERE {scope} AND {complete} GROUP BY 1 ORDER BY n DESC LIMIT {GROUP_LIMIT + 1}",
         )
         if groups is not None:
-            m.groups = [(str(g), int(n)) for g, n in groups.rows]
+            m.groups = [(str(g), int(n)) for g, n, _ in groups.rows]
+            m.constant_groups = [
+                str(g) for g, n, k in groups.rows if k is not None and int(k) <= 1 and n > 1
+            ]
             report.facts.append(
                 {
                     "fact": "groups",

@@ -85,3 +85,25 @@ def test_question_ids_are_unique_and_sql_cases_have_gold() -> None:
     assert len({c["id"] for c in cases}) == len(cases) >= 30
     for c in cases:
         assert (c["gold_sql"] is None) == (c["expected"] != "answer"), c["id"]
+
+
+def test_rq_benchmark_runs_with_gold_mappings(tmp_path: Path) -> None:
+    """Benchmark C end to end without an LLM: real data, real checks, rule verdicts."""
+    from evals import rq_eval
+
+    cases = rq_eval.load_cases()
+    assert len(cases) >= 10
+    assert sum(c["expected_verdict"] == "not_answerable" for c in cases) >= 3
+    picked = [c for c in cases if c["id"] in ("cps-satisfaction", "flights-1955-1965")]
+    db = tmp_path / "rq.duckdb"
+    ctx = local_project.build(db, sorted({t for c in picked for t in c["tables"]}))
+
+    async def run_all() -> list[dict[str, object]]:
+        return [await rq_eval.run_case(rq_eval.NoLLM(), db, ctx, c, True) for c in picked]
+
+    results = asyncio.run(run_all())
+    assert [(r["id"], r["verdict"]) for r in results] == [
+        ("cps-satisfaction", "not_answerable"),
+        ("flights-1955-1965", "partial"),
+    ]
+    assert all(r["explained_by"] == "rules" for r in results)

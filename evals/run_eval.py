@@ -5,6 +5,8 @@
     python evals/run_eval.py qa                  # the real agent (LLM_* settings from .env)
     python evals/run_eval.py qa --smoke          # 15-question smoke set
     python evals/run_eval.py qa --ids cps-01 cps-02
+    python evals/run_eval.py rq --gold-mapping   # RQ verdicts from labelled mappings, no LLM
+    python evals/run_eval.py rq                  # RQ fit with the LLM parsing and mapping
 
 Run from the repository root with PYTHONPATH=apps:. so both `api` and `evals` import.
 Reports go to evals/reports/.
@@ -32,7 +34,7 @@ from api.llm.tracing import null_tracer
 from api.semantic.column_retrieval import ColumnRetriever
 from api.sql.executor import ROW_LIMIT, QueryResult, run_query
 from api.stats.library import run_test
-from evals import local_project
+from evals import local_project, rq_eval
 from evals.oracle import OracleClient
 from evals.scoring import results_match, stat_results_match
 
@@ -204,7 +206,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("suite", choices=["qa"])
+    parser.add_argument("suite", choices=["qa", "rq"])
     parser.add_argument("--check-gold", action="store_true")
     parser.add_argument("--llm", choices=["settings", "oracle"], default="settings")
     parser.add_argument("--model", default=None, help="override LLM_MODEL")
@@ -213,7 +215,12 @@ async def main() -> int:
     parser.add_argument(
         "--no-retrieval", action="store_true", help="word matching only (experiment 6)"
     )
+    parser.add_argument(
+        "--gold-mapping", action="store_true", help="rq: use labelled mappings, no LLM"
+    )
     args = parser.parse_args()
+    if args.suite == "rq":
+        return await main_rq(args)
 
     cases = load_cases(args.ids, args.smoke)
     with tempfile.TemporaryDirectory() as tmp:
@@ -261,6 +268,38 @@ async def main() -> int:
     (REPORTS / f"{stem}.md").write_text(summary)
     print("\n" + summary)
     return 0 if all(r["passed"] for r in results) else 1
+
+
+async def main_rq(args: argparse.Namespace) -> int:
+    cases = rq_eval.load_cases(args.ids)
+    client: Any = rq_eval.NoLLM() if args.gold_mapping else LLMClient.from_settings(null_tracer)
+    if args.model and not args.gold_mapping:
+        client.model = args.model
+    meta = {
+        "started": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        "mode": "gold-mapping" if args.gold_mapping else "full",
+        "model": client.model,
+        "git_sha": git_sha(),
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        db = Path(tmp) / "eval.duckdb"
+        ctx = local_project.build(db, sorted({t for c in cases for t in c["tables"]}))
+        results = []
+        for case in cases:
+            r = await rq_eval.run_case(client, db, ctx, case, args.gold_mapping)
+            results.append(r)
+            mark = "AGREE   " if r["passed"] else "DISAGREE"
+            print(f"{mark} {case['id']:26} {r['verdict']:15} {', '.join(r['rules'])}")
+
+    REPORTS.mkdir(exist_ok=True)
+    stem = f"rq-{datetime.now(UTC):%Y%m%d-%H%M%S}-{meta['mode']}"
+    (REPORTS / f"{stem}.json").write_text(
+        json.dumps({"meta": meta, "results": results}, indent=1, default=str) + "\n"
+    )
+    summary = rq_eval.summarise(results, meta)
+    (REPORTS / f"{stem}.md").write_text(summary)
+    print("\n" + summary)
+    return 0
 
 
 if __name__ == "__main__":
