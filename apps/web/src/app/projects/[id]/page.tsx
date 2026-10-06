@@ -2,6 +2,8 @@ import {
   ArrowRight,
   ChartNoAxesColumn,
   Database,
+  Download,
+  FileText,
   Lightbulb,
   Link2,
   MessagesSquare,
@@ -179,6 +181,37 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
                 text="Ask questions; see the SQL behind every answer."
               />
             </nav>
+          )}
+
+          {ready.length > 0 && (
+            <div className="card flex flex-col gap-3 p-4">
+              <div className="flex items-center gap-2">
+                <FileText className="text-brand h-4 w-4" aria-hidden />
+                <h2 className="text-sm font-semibold">Dataset report</h2>
+              </div>
+              <p className="text-muted text-sm">
+                A draft of your paper&apos;s data section: dictionary, quality
+                warnings, research-question fit and top insights.
+              </p>
+              <div className="flex gap-2">
+                <a
+                  href={`/api/projects/${project.id}/report?format=pdf`}
+                  className="btn btn-secondary btn-sm"
+                  download
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden />
+                  PDF
+                </a>
+                <a
+                  href={`/api/projects/${project.id}/report?format=md`}
+                  className="btn btn-secondary btn-sm"
+                  download
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden />
+                  Markdown
+                </a>
+              </div>
+            </div>
           )}
 
           <form

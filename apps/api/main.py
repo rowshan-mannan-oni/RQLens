@@ -16,6 +16,7 @@ from api.routes import (
     projects,
     query,
     relationships,
+    report,
     rqs,
 )
 
@@ -46,3 +47,4 @@ app.include_router(combine.router)
 app.include_router(chat.router)
 app.include_router(rqs.router)
 app.include_router(insights.router)
+app.include_router(report.router)

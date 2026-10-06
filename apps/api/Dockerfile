@@ -6,6 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Pango and fonts for PDF reports (WeasyPrint).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first so code edits don't bust the layer cache.
 COPY pyproject.toml ./
 RUN mkdir -p apps/api && touch apps/api/__init__.py \
