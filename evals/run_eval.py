@@ -7,6 +7,10 @@
     python evals/run_eval.py qa --ids cps-01 cps-02
     python evals/run_eval.py rq --gold-mapping   # RQ verdicts from labelled mappings, no LLM
     python evals/run_eval.py rq                  # RQ fit with the LLM parsing and mapping
+    python evals/run_eval.py lit --llm oracle    # literature extraction, harness self-test
+    python evals/run_eval.py lit                 # literature extraction with the real model
+    python evals/run_eval.py lit --no-check      # experiment 8: without the citation check
+    python evals/run_eval.py lit --retrieval     # experiment 7: retrieved passages per column
 
 Run from the repository root with PYTHONPATH=apps:. so both `api` and `evals` import.
 Reports go to evals/reports/.
@@ -35,7 +39,7 @@ from api.llm.tracing import null_tracer
 from api.semantic.column_retrieval import ColumnRetriever
 from api.sql.executor import ROW_LIMIT, QueryResult, run_query
 from api.stats.library import run_test
-from evals import insights_eval, local_project, rq_eval
+from evals import insights_eval, lit_eval, local_project, rq_eval
 from evals.oracle import OracleClient
 from evals.scoring import results_match, stat_results_match
 
@@ -219,7 +223,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("suite", choices=["qa", "rq", "insights"])
+    parser.add_argument("suite", choices=["qa", "rq", "insights", "lit"])
     parser.add_argument("--check-gold", action="store_true")
     parser.add_argument("--llm", choices=["settings", "oracle"], default="settings")
     parser.add_argument("--model", default=None, help="override LLM_MODEL")
@@ -231,7 +235,15 @@ async def main() -> int:
     parser.add_argument(
         "--gold-mapping", action="store_true", help="rq: use labelled mappings, no LLM"
     )
+    parser.add_argument(
+        "--no-check", action="store_true", help="lit: no citation check or retry (experiment 8)"
+    )
+    parser.add_argument(
+        "--retrieval", action="store_true", help="lit: retrieved passages only (experiment 7)"
+    )
     args = parser.parse_args()
+    if args.suite == "lit":
+        return await main_lit(args)
     if args.suite == "rq":
         return await main_rq(args)
     if args.suite == "insights":
@@ -343,6 +355,42 @@ async def main_insights(args: argparse.Namespace) -> int:
     (REPORTS / f"{stem}.md").write_text(summary)
     print("\n" + summary)
     return 0 if all(not r["ungrounded"] for r in results) else 1
+
+
+async def main_lit(args: argparse.Namespace) -> int:
+    labels = lit_eval.load_labels()
+    client: Any
+    if args.llm == "oracle":
+        client = lit_eval.LitOracle(labels)
+    else:
+        client = LLMClient.from_settings(tracer=null_tracer)
+        if args.model:
+            client.model = args.model
+    meta = {
+        "started": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        "model": client.model,
+        "check": not args.no_check,
+        "passages": "retrieved per column" if args.retrieval else "whole paper",
+        "git_sha": git_sha(),
+    }
+    results = []
+    for paper_id, spec in lit_eval.corpus(args.ids):
+        r = await lit_eval.run_paper(
+            client, paper_id, spec, labels.get(paper_id, {}),
+            check=not args.no_check, retrieval=args.retrieval,
+        )  # fmt: skip
+        results.append(r)
+        ok = sum(1 for c in r["cells"] if c.get("correct") or c.get("not_found_correct"))
+        print(f"{paper_id:20} {ok:>2}/{len(r['cells'])} cells right  {r['seconds']:5.1f}s")
+    REPORTS.mkdir(exist_ok=True)
+    stem = f"lit-{datetime.now(UTC):%Y%m%d-%H%M%S}-{args.llm}"
+    (REPORTS / f"{stem}.json").write_text(
+        json.dumps({"meta": meta, "results": results}, indent=1, default=str) + "\n"
+    )
+    summary = lit_eval.summarise(results, meta)
+    (REPORTS / f"{stem}.md").write_text(summary)
+    print("\n" + summary)
+    return 0
 
 
 if __name__ == "__main__":

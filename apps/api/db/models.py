@@ -17,6 +17,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -216,6 +217,104 @@ class Insight(TimestampMixin, Base):
     result_json: Mapped[Json | None]
     chart_json: Mapped[Json | None]
     caveats_json: Mapped[Json | None]
+
+
+class Paper(TimestampMixin, Base):
+    """An uploaded PDF. Its text is split into citable passages (`passages`)."""
+
+    __tablename__ = "papers"
+    __table_args__ = (UniqueConstraint("project_id", "sha256"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = fk("projects.id")
+    filename: Mapped[str] = mapped_column(String(500))
+    folder: Mapped[str | None] = mapped_column(
+        String(500)
+    )  # subfolder path when uploaded as a folder
+    sha256: Mapped[str] = mapped_column(String(64))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    # queued | parsing | ready | needs_ocr | failed
+    status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued")
+    error: Mapped[str | None] = mapped_column(Text)
+    page_count: Mapped[int | None]
+    pages_json: Mapped[Json | None]  # [[width, height], ...] in PDF points
+    passage_count: Mapped[int | None]
+    char_count: Mapped[int | None]
+    title: Mapped[str | None] = mapped_column(Text)
+    authors_json: Mapped[Json | None]
+    year: Mapped[int | None]
+    venue: Mapped[str | None] = mapped_column(Text)
+    doi: Mapped[str | None] = mapped_column(String(300))
+    metadata_source_json: Mapped[Json | None]  # field -> pdf_metadata | first_page | user
+    sections_json: Mapped[Json | None]
+
+
+class Passage(Base):
+    """One citable unit of a paper, normally a sentence, with its position on the page."""
+
+    __tablename__ = "passages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    paper_id: Mapped[int] = fk("papers.id")
+    ordinal: Mapped[int]
+    label: Mapped[str] = mapped_column(String(24))  # P3-S12: page 3, 12th passage on it
+    page: Mapped[int]
+    section: Mapped[str | None] = mapped_column(Text)
+    section_kind: Mapped[str] = mapped_column(String(32))
+    kind: Mapped[str] = mapped_column(String(16))  # sentence | caption | reference
+    text: Mapped[str] = mapped_column(Text)
+    rects_json: Mapped[Json]  # [[x0, y0, x1, y1], ...], one per line, top-left origin
+
+
+class ReviewTemplate(TimestampMixin, Base):
+    """A user's own review template. Built-in templates live in code (review/templates.py)."""
+
+    __tablename__ = "review_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = fk("users.id")
+    name: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text)
+    columns_json: Mapped[Json]
+    version: Mapped[int] = mapped_column(default=1, server_default="1")
+
+
+class ReviewTable(TimestampMixin, Base):
+    """A project's literature table: one row per paper, one column per template field."""
+
+    __tablename__ = "review_tables"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = fk("projects.id")
+    name: Mapped[str] = mapped_column(String(200))
+    template_key: Mapped[str] = mapped_column(String(64))  # builtin:<name> or user:<id>
+    # The columns as they were when the table was made; later template edits do not apply.
+    columns_json: Mapped[Json]
+
+
+class ReviewCell(Base):
+    __tablename__ = "review_cells"
+    __table_args__ = (UniqueConstraint("table_id", "paper_id", "column_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    table_id: Mapped[int] = fk("review_tables.id")
+    paper_id: Mapped[int] = fk("papers.id")
+    column_key: Mapped[str] = mapped_column(String(64))
+    # queued | running | done | not_found | unverified | failed
+    status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued")
+    value_json: Mapped[Json | None]
+    source: Mapped[str | None] = mapped_column(String(16))  # llm | metadata | user
+    # [{passage_id, label, page, quote, verified, score}], checked against the passage text
+    citations_json: Mapped[Json | None]
+    confidence: Mapped[str | None] = mapped_column(String(8))  # high | medium | low
+    note: Mapped[str | None] = mapped_column(Text)  # not-found reason, check failure or error
+    ai_json: Mapped[Json | None]  # the AI's last answer, kept when the user edits the cell
+    review: Mapped[str | None] = mapped_column(String(16))  # accepted | rejected
+    # Bumped on each re-run or edit, so a job started earlier discards its result.
+    version: Mapped[int] = mapped_column(default=0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class Chat(TimestampMixin, Base):

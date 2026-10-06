@@ -29,7 +29,10 @@ from api.insights.jobs import generate_insights
 from api.limits import ai_usage, over_limit_message
 from api.llm.client import LLMClient
 from api.observability import init_error_tracking
+from api.papers.jobs import parse_paper
 from api.profiler.joins import JoinColumn, JoinTable
+from api.review.jobs import TRIES as REVIEW_TRIES
+from api.review.jobs import extract_new_paper, extract_paper
 from api.rq.jobs import NO_DATA_ERROR, assess_rq, suggest_rqs
 from api.rq.jobs import TRIES as RQ_TRIES
 from api.semantic.describer import column_evidence, describe
@@ -398,6 +401,9 @@ class WorkerSettings:
         func(assess_rq, max_tries=RQ_TRIES),
         suggest_rqs,
         generate_insights,
+        parse_paper,
+        func(extract_paper, max_tries=REVIEW_TRIES),
+        extract_new_paper,
     ]
     on_startup = startup
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)

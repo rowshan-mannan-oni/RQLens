@@ -1,0 +1,311 @@
+[
+  {
+    "id": "defect-gnn",
+    "layout": "two",
+    "abstract_style": "inline",
+    "running_header": "IEEE TRANSACTIONS ON SOFTWARE ENGINEERING, VOL. 49, NO. 7, JULY 2023",
+    "title": "Graph Neural Networks for Cross-Project Defect Prediction",
+    "authors": [
+      "Maria Okafor",
+      "Daniel Brandt",
+      "Wei Zhang"
+    ],
+    "affiliations": [
+      "Department of Computer Science, University of Leeds, United Kingdom",
+      "School of Software, Tsinghua University, China"
+    ],
+    "year": 2023,
+    "venue": "IEEE Transactions on Software Engineering",
+    "doi": "10.1109/TSE.2023.3271190",
+    "abstract": "Defect prediction models trained on one project often fail when they are applied to another project. We propose GraphDP, a defect predictor that represents each source file as a graph of its abstract syntax tree and learns structural features with a graph neural network. On 18 projects from the PROMISE repository, GraphDP reaches a mean F1 score of 0.64 in the cross-project setting, compared with 0.52 for the best metric-based baseline. The results suggest that structural code features transfer better between projects than traditional size and complexity metrics.",
+    "sections": [
+      {
+        "heading": "1. Introduction",
+        "paragraphs": [
+          "Software defects are expensive to find late in development, and many teams use defect prediction to decide where to spend testing effort. A defect predictor ranks source files by their likelihood of containing a bug, so that reviewers can inspect the riskiest files first.",
+          "Most predictors are trained on the history of the project they are used on. New projects have no such history, which motivates cross-project defect prediction, where a model trained on other projects is applied to the target project. The problem we address is that cross-project predictors built on traditional metrics such as lines of code and cyclomatic complexity lose much of their accuracy when the training and target projects differ in size, domain or coding style.",
+          "This paper asks two research questions. RQ1: Does a graph representation of source code improve cross-project defect prediction over metric-based models? RQ2: Which structural patterns does the model rely on when it predicts a defect?"
+        ]
+      },
+      {
+        "heading": "2. Related Work",
+        "paragraphs": [
+          "Early defect predictors used static code metrics with logistic regression or random forests. Transfer learning methods such as TCA+ align the metric distributions of the source and target projects. Deep learning approaches have learned semantic features from token sequences, but they ignore the tree structure of the code."
+        ]
+      },
+      {
+        "heading": "3. Approach",
+        "paragraphs": [
+          "GraphDP parses each Java file into an abstract syntax tree and adds control-flow and data-flow edges between the tree nodes. A three-layer gated graph neural network computes an embedding for every node, and attention pooling combines the node embeddings into one vector per file. A final linear layer predicts whether the file is defective.",
+          "To reduce the difference between projects, we normalise identifier names and train the network with a domain-adversarial loss that penalises features which reveal the source project."
+        ]
+      },
+      {
+        "heading": "4. Experimental Setup",
+        "paragraphs": [
+          "We use 18 open-source Java projects from the PROMISE repository, with 41 releases and 12,460 files in total, of which 2,931 files are labelled defective. For each target project, the model is trained on the other 17 projects and tested on the target.",
+          "We report precision, recall, F1 score and the area under the ROC curve (AUC). We compare GraphDP with three baselines: a random forest on static metrics, TCA+, and a token-based convolutional network."
+        ],
+        "tables": [
+          "Table 1: Projects used in the study, with releases, files and defect rates."
+        ]
+      },
+      {
+        "heading": "5. Results",
+        "paragraphs": [
+          "GraphDP achieves a mean F1 score of 0.64 and a mean AUC of 0.78 across the 18 target projects. The best baseline, TCA+, reaches a mean F1 score of 0.52 and an AUC of 0.71. The improvement is statistically significant (Wilcoxon signed-rank test, p < 0.01) with a large effect size (Cliff's delta = 0.48).",
+          "Attention weights show that the model relies most on nested exception handlers, long chains of method calls and variables that are written in more than one branch. These patterns correspond to error-prone code identified in earlier studies."
+        ],
+        "tables": [
+          "Table 2: F1 score and AUC of GraphDP and the baselines on each target project."
+        ]
+      },
+      {
+        "heading": "6. Threats to Validity",
+        "paragraphs": [
+          "Our study only covers Java projects, so the results may not hold for other languages. The PROMISE defect labels come from issue trackers and may contain mislabelled files. We did not tune the hyperparameters of the baselines as extensively as those of GraphDP, which could favour our approach."
+        ]
+      },
+      {
+        "heading": "7. Conclusion",
+        "paragraphs": [
+          "Structural features learned from code graphs transfer between projects better than traditional metrics. In future work we plan to evaluate GraphDP on Python and C projects and to explain individual predictions to developers."
+        ]
+      }
+    ],
+    "references": [
+      "T. Menzies, J. Greenwald, and A. Frank, \"Data mining static code attributes to learn defect predictors,\" IEEE Transactions on Software Engineering, vol. 33, no. 1, pp. 2-13, 2007.",
+      "J. Nam, S. J. Pan, and S. Kim, \"Transfer defect learning,\" in Proceedings of the International Conference on Software Engineering, 2013, pp. 382-391.",
+      "S. Wang, T. Liu, and L. Tan, \"Automatically learning semantic features for defect prediction,\" in Proceedings of the International Conference on Software Engineering, 2016, pp. 297-308.",
+      "Y. Li, D. Tarlow, M. Brockschmidt, and R. Zemel, \"Gated graph sequence neural networks,\" in International Conference on Learning Representations, 2016."
+    ]
+  },
+  {
+    "id": "sleep-students",
+    "layout": "one",
+    "abstract_style": "heading",
+    "running_header": "Okonkwo and Lindqvist · Sleep and academic performance",
+    "title": "Sleep Duration and Academic Performance in First-Year University Students: A Longitudinal Survey",
+    "authors": [
+      "Chidi Okonkwo",
+      "Astrid Lindqvist"
+    ],
+    "affiliations": [
+      "Faculty of Health Sciences, University of Bergen, Norway"
+    ],
+    "year": 2021,
+    "venue": "Journal of Adolescent Health Research",
+    "doi": "10.1016/j.jahr.2021.04.012",
+    "abstract": "Short sleep is common among university students, but its link with grades over a whole academic year is not well understood. We followed 1,204 first-year students at three Norwegian universities for one academic year with monthly sleep diaries and linked the diaries to official grade records. Students who slept less than six hours on weeknights had a grade point average 0.31 points lower than students who slept seven to eight hours, after adjusting for sex, age, study programme and part-time work. The association was stronger in the spring semester than in the autumn semester.",
+    "sections": [
+      {
+        "heading": "Introduction",
+        "paragraphs": [
+          "The transition to university brings irregular schedules, new social demands and more freedom over daily routines. Several cross-sectional surveys have reported that students who sleep less have lower grades. However, cross-sectional designs cannot show whether short sleep precedes poor performance or follows it.",
+          "Our aim was to describe how weeknight sleep duration changes during the first year of university and to estimate its association with grade point average at the end of the year."
+        ]
+      },
+      {
+        "heading": "Methods",
+        "paragraphs": [
+          "We invited all 3,950 first-year students enrolled at three universities in Norway in August 2019, and 1,204 students (30.5%) consented and completed at least six of the nine monthly sleep diaries. Each diary recorded bedtime, wake time and naps for seven consecutive days.",
+          "Grade point average (GPA) on a scale from 0 to 5 was obtained from university registries in June 2020. We fitted linear mixed models with GPA as the outcome, average weeknight sleep duration in categories as the exposure, and university as a random effect. Models were adjusted for sex, age, study programme and hours of part-time work."
+        ]
+      },
+      {
+        "heading": "Results",
+        "paragraphs": [
+          "Mean weeknight sleep duration fell from 7.4 hours in September to 6.8 hours in March. In total, 22% of the students slept less than six hours on an average weeknight.",
+          "Compared with students who slept seven to eight hours, students who slept less than six hours had an adjusted GPA that was 0.31 points lower (95% confidence interval 0.19 to 0.43). Students who slept more than nine hours did not differ from the reference group. The association was stronger in the spring semester (difference 0.38) than in the autumn semester (difference 0.22)."
+        ],
+        "tables": [
+          "Table 2: Adjusted differences in GPA by weeknight sleep duration and semester."
+        ]
+      },
+      {
+        "heading": "Discussion",
+        "paragraphs": [
+          "Short sleep was associated with lower grades even after adjustment for part-time work, which is a common reason for short sleep among students. The stronger association in spring may reflect accumulated sleep debt during the year.",
+          "The study has limitations. Sleep was self-reported in diaries rather than measured with actigraphy, and students who completed most diaries may have been more conscientious than those who did not. Because the study is observational, we cannot conclude that longer sleep would raise grades."
+        ]
+      },
+      {
+        "heading": "Conclusion",
+        "paragraphs": [
+          "Weeknight sleep of less than six hours is common among first-year students and is associated with a clinically relevant reduction in grades. Universities should consider sleep in their student health programmes, and randomised trials of sleep interventions are needed."
+        ]
+      }
+    ],
+    "references": [
+      "Hershner SD, Chervin RD. Causes and consequences of sleepiness among college students. Nature and Science of Sleep. 2014;6:73-84.",
+      "Lund HG, Reider BD, Whiting AB, Prichard JR. Sleep patterns and predictors of disturbed sleep in a large population of college students. Journal of Adolescent Health. 2010;46(2):124-132."
+    ]
+  },
+  {
+    "id": "no-limitations",
+    "layout": "two",
+    "abstract_style": "heading",
+    "running_header": "Proceedings of the 2022 Conference on Empirical Methods in Software Engineering",
+    "title": "How Developers Review Test Code: An Exploratory Interview Study",
+    "authors": [
+      "Priya Raman",
+      "Tomas Novak"
+    ],
+    "affiliations": [
+      "Department of Informatics, Masaryk University, Czech Republic"
+    ],
+    "year": 2022,
+    "venue": "Proceedings of the 2022 Conference on Empirical Methods in Software Engineering",
+    "abstract": "Code review is widely practised, but little is known about how reviewers treat test code. We interviewed 14 developers from five companies about how they review changes to test files. Reviewers reported spending less time on test code than on production code and focusing on whether tests exist rather than on what they check.",
+    "sections": [
+      {
+        "heading": "1. Introduction",
+        "paragraphs": [
+          "Tests protect a code base against regressions only if they check the right behaviour. Reviews of production code have been studied extensively, while the review of test code has received less attention. We set out to understand what reviewers look for when a change modifies test files."
+        ]
+      },
+      {
+        "heading": "2. Method",
+        "paragraphs": [
+          "We conducted semi-structured interviews with 14 developers from five software companies in Central Europe. Each interview lasted between 40 and 60 minutes and was recorded and transcribed. Two authors coded the transcripts with thematic analysis and resolved disagreements in discussion."
+        ]
+      },
+      {
+        "heading": "3. Findings",
+        "paragraphs": [
+          "Eleven of the 14 developers said that they spend less time reviewing test code than production code. Reviewers most often checked whether a change came with tests at all, and rarely checked whether the assertions would detect a faulty implementation. Several participants described test code as something they trust the author to get right."
+        ]
+      },
+      {
+        "heading": "4. Conclusion",
+        "paragraphs": [
+          "Test code receives less scrutiny in review than production code. Review tools could highlight weak assertions to draw attention to test quality."
+        ]
+      }
+    ],
+    "references": [
+      "A. Bacchelli and C. Bird, \"Expectations, outcomes, and challenges of modern code review,\" in Proceedings of the International Conference on Software Engineering, 2013, pp. 712-721."
+    ]
+  },
+  {
+    "id": "abstract-disagree",
+    "layout": "two",
+    "abstract_style": "heading",
+    "running_header": "Journal of Machine Learning for Health, Volume 4, 2024",
+    "title": "Lightweight Convolutional Networks for Skin Lesion Classification on Mobile Phones",
+    "authors": [
+      "Laura Benedetti",
+      "Samuel Adeyemi",
+      "Hannah Kowalski"
+    ],
+    "affiliations": [
+      "Department of Electrical Engineering, Politecnico di Milano, Italy"
+    ],
+    "year": 2024,
+    "venue": "Journal of Machine Learning for Health",
+    "doi": "10.5555/jmlh.2024.0042",
+    "abstract": "Dermatology screening apps need models that run on ordinary phones. We present DermaLite, a convolutional network with 1.9 million parameters for classifying skin lesions into seven categories. On the HAM10000 dataset, DermaLite achieves 91.2% top-1 accuracy while running in 38 milliseconds on a mid-range phone.",
+    "sections": [
+      {
+        "heading": "1. Introduction",
+        "paragraphs": [
+          "Skin cancer is among the most common cancers, and early detection improves survival. Specialist dermatologists are scarce in many regions, so automated screening on a phone could help patients decide when to seek care.",
+          "Existing classifiers reach high accuracy but need server-class hardware, which makes them hard to deploy offline on phones. We ask whether a small network can match larger models while running on the device itself."
+        ]
+      },
+      {
+        "heading": "2. Method",
+        "paragraphs": [
+          "DermaLite stacks depthwise separable convolutions with squeeze-and-excitation blocks and has 1.9 million parameters. We train it with focal loss to handle the imbalance between the seven lesion classes, and we use test-time augmentation with four flips."
+        ]
+      },
+      {
+        "heading": "3. Experimental Setup",
+        "paragraphs": [
+          "We train and test on the HAM10000 dataset of 10,015 dermatoscopic images in seven classes, using a split by patient so that no patient appears in both the training and the test set. We report top-1 accuracy, balanced accuracy and inference time on a Pixel 6a phone."
+        ]
+      },
+      {
+        "heading": "4. Results",
+        "paragraphs": [
+          "An earlier version of our experiments split the images at random, which placed images of the same lesion in both splits. After correcting this leak with a split by patient, DermaLite reaches 89.4% top-1 accuracy and 78.6% balanced accuracy. Inference takes 38 milliseconds per image on the phone, compared with 410 milliseconds for EfficientNet-B4.",
+          "Melanoma remains the hardest class: 31% of melanoma images are classified as benign nevi."
+        ],
+        "tables": [
+          "Table 3: Accuracy, balanced accuracy and inference time of DermaLite and four baselines."
+        ]
+      },
+      {
+        "heading": "5. Limitations",
+        "paragraphs": [
+          "HAM10000 contains mostly images of patients with light skin, so the accuracy for darker skin types is unknown. The images come from dermatoscopes, not from phone cameras, which limits what the results say about real screening use."
+        ]
+      },
+      {
+        "heading": "6. Conclusion",
+        "paragraphs": [
+          "A network small enough to run on a phone can classify skin lesions with accuracy close to larger models. Future work will collect phone-camera images across skin types and run a prospective study in primary care."
+        ]
+      }
+    ],
+    "references": [
+      "P. Tschandl, C. Rosendahl, and H. Kittler, \"The HAM10000 dataset,\" Scientific Data, vol. 5, 2018."
+    ]
+  },
+  {
+    "id": "mindfulness-rct",
+    "layout": "one",
+    "abstract_style": "heading",
+    "running_header": "Hernandez et al. · Mindfulness app for anxiety",
+    "title": "A Smartphone Mindfulness Programme for Generalised Anxiety: A Randomised Controlled Trial",
+    "authors": [
+      "Elena Hernandez",
+      "Thomas Whitfield"
+    ],
+    "affiliations": [
+      "School of Psychology, University of Sheffield, United Kingdom"
+    ],
+    "year": 2022,
+    "venue": "Journal of Anxiety and Digital Health",
+    "doi": "10.1037/jadh.2022.117",
+    "abstract": "We tested whether an eight-week smartphone mindfulness programme reduces symptoms of generalised anxiety disorder. In a randomised controlled trial with 412 adults, the programme reduced GAD-7 scores by 2.9 points more than a waiting list control after eight weeks.",
+    "sections": [
+      {
+        "heading": "Introduction",
+        "paragraphs": [
+          "Generalised anxiety disorder is common, and many people wait months for psychological therapy. Self-guided digital programmes could provide help sooner, but evidence from randomised trials is limited.",
+          "We hypothesised that an eight-week smartphone mindfulness programme would reduce anxiety symptoms more than a waiting list."
+        ]
+      },
+      {
+        "heading": "Methods",
+        "paragraphs": [
+          "We recruited adults with a GAD-7 score of 10 or more through general practices in England. Participants were randomised 1:1 to the programme or to a waiting list. The programme consisted of daily ten-minute guided exercises for eight weeks.",
+          "The primary outcome was the GAD-7 score at eight weeks. Secondary outcomes were depressive symptoms measured with the PHQ-9 and adherence to the programme. Analyses followed the intention-to-treat principle."
+        ]
+      },
+      {
+        "heading": "Results",
+        "paragraphs": [
+          "Of 412 randomised adults, 207 were allocated to the programme and 205 to the waiting list, and 351 (85%) completed the eight-week assessment.",
+          "At eight weeks, GAD-7 scores were 2.9 points lower in the programme group than in the control group (95% confidence interval 2.1 to 3.7). PHQ-9 scores were 1.6 points lower (95% confidence interval 0.8 to 2.4). Participants completed a median of 41 of 56 exercises."
+        ]
+      },
+      {
+        "heading": "Discussion",
+        "paragraphs": [
+          "The programme produced a moderate reduction in anxiety compared with a waiting list. A limitation is that a waiting list does not control for attention or expectation, so part of the effect may not be specific to mindfulness. Outcomes were self-reported, and follow-up lasted only eight weeks."
+        ]
+      },
+      {
+        "heading": "Conclusion",
+        "paragraphs": [
+          "A self-guided smartphone mindfulness programme reduces anxiety symptoms in the short term. Trials with an active control and longer follow-up are needed."
+        ]
+      }
+    ],
+    "references": [
+      "Spitzer RL, Kroenke K, Williams JB, Lowe B. A brief measure for assessing generalized anxiety disorder: the GAD-7. Archives of Internal Medicine. 2006;166(10):1092-1097."
+    ]
+  }
+]

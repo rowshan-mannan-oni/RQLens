@@ -60,3 +60,19 @@ PYTHONPATH=apps:. python evals/run_eval.py insights --ids mpg
 ```
 
 Each dataset runs as its own project, with that dataset's labelled research questions. The report counts insights, findings, charts and confounder flags, and fails if any statement has a number that does not appear in its test result. Set `LLM_API_KEY=` (empty) to run without an LLM.
+
+## Literature extraction (benchmark D)
+
+```sh
+PYTHONPATH=apps:. python evals/run_eval.py lit --llm oracle   # harness self-test; should be 100%
+PYTHONPATH=apps:. python evals/run_eval.py lit                # the real model (LLM_* settings)
+PYTHONPATH=apps:. python evals/run_eval.py lit --no-check     # experiment 8: no citation check
+PYTHONPATH=apps:. python evals/run_eval.py lit --retrieval    # experiment 7: retrieved passages
+PYTHONPATH=apps:. python evals/run_eval.py lit --model <name> # experiment 9: another model
+```
+
+`literature/papers.v1.json` describes each paper (metadata, layout, sections, references); `literature/synth.py` renders it to a PDF the way real papers look (two columns, running headers, page numbers, automatic hyphenation), and the app's own parser reads it back. `literature/labels.v1.jsonl` labels every (paper, column) of the built-in literature review template: whether the paper states it, the key terms a correct value must contain (`a|b` = either), forbidden terms, and the supporting sentences in groups of equivalent alternatives.
+
+Planted cases: `no-limitations` has no limitations section (the right answer is not found), and `abstract-disagree` reports 91.2% accuracy in its abstract but a corrected 89.4% in its results (the value and its citation must come from the results).
+
+The 5 papers are synthetic, so every sentence is known; they test the pipeline, not a model's reading of real prose. The plan's benchmark needs 20 to 30 real open-access papers with hand-filled tables. Add a real paper by putting its PDF in `literature/pdfs/` and its labels in the same format (support sentences copied from the PDF); this sandbox could not download papers.

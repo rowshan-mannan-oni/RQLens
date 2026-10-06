@@ -14,10 +14,12 @@ from api.routes import (
     datasets,
     health,
     insights,
+    papers,
     projects,
     query,
     relationships,
     report,
+    review,
     rqs,
     usage,
 )
@@ -53,3 +55,6 @@ app.include_router(rqs.router)
 app.include_router(insights.router)
 app.include_router(report.router)
 app.include_router(usage.router)
+app.include_router(papers.router)
+app.include_router(review.templates_router)
+app.include_router(review.router)

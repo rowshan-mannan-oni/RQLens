@@ -6,6 +6,8 @@ RQ Lens is a companion for researchers working with a tabular dataset. Upload CS
 
 ![RQ Fit page](docs/rq-fit.png)
 
+![Literature table with the reader open at a cited sentence](docs/literature-reader.png)
+
 ## What it does
 
 | Feature | How it works |
@@ -14,6 +16,7 @@ RQ Lens is a companion for researchers working with a tabular dataset. Upload CS
 | **Research-question fit** | An LLM parses each question and maps its constructs to columns. Guarded SQL checks then measure rows in scope, missing values, group sizes, outcome variation, time coverage and statistical power. **Fixed rules** give the verdict: answerable, partly answerable or not answerable. The LLM only writes the explanation, and every number in it must appear in a query result. |
 | **Insights** | Up to 20 analyses are planned from your questions and the profile, then run with a fixed statistics library (Spearman, Mann-Whitney U, Kruskal-Wallis, chi-square, trend). Results are corrected with Benjamini-Hochberg, ranked by relevance, effect size and support (not p-value), and re-tested within subgroups to catch confounding. |
 | **Chat** | A bounded tool-using agent (schema, profiles, column search, read-only SQL, statistical tests, charts). Answers stream back with their queries, and an answer with a number not found in any tool result is rejected. |
+| **Literature review** | Upload PDFs or a whole folder. Each paper is split into numbered sentences with their positions on the page, and the AI fills a review table (built-in templates or your own), citing sentence IDs with quotes. A check without AI verifies every quote and number against the cited sentence; failures are retried once, then marked *unverified*. Click a citation to open the PDF at that page with the sentence highlighted. Edits are never overwritten; exports to CSV, Excel, Markdown and BibTeX. |
 | **Dataset report** | A Markdown or PDF report with an overview, data dictionary, quality warnings, question fit, top insights and limitations. It works as a draft of a paper's data section. |
 | **Usage and limits** | Every AI call and query is logged. The Usage page shows calls, tokens, cost and latency (average and p95) per project. Per-user limits cover projects, datasets, upload size and monthly AI calls and spend. |
 
@@ -77,6 +80,7 @@ PYTHONPATH=apps:. python evals/run_eval.py qa         # chat accuracy (execution
 PYTHONPATH=apps:. python evals/run_eval.py qa --smoke # 15-question smoke set
 PYTHONPATH=apps:. python evals/run_eval.py rq         # RQ verdict agreement and mapping precision/recall
 PYTHONPATH=apps:. python evals/run_eval.py insights   # insight generation across all datasets
+PYTHONPATH=apps:. python evals/run_eval.py lit        # literature extraction with citations
 ```
 
 There are 9 versioned development datasets: survey, software defects, time series, timestamps, a 75-column table, leakage and missingness cases, and a deliberately messy export.
@@ -89,7 +93,8 @@ There are 9 versioned development datasets: survey, software defects, time serie
 | Insights on all 9 datasets | 161 insights, all charted; **0** with a number that cannot be traced to a query | Template wording; the LLM rewording has not been run with a real model |
 | Planted effects | A planted strong effect ranks first; 6 pure-noise pairs come out as "no clear evidence" after correction; a planted Simpson's paradox is caught | Unit tests |
 | Chat accuracy (31 questions) | Harness passes 31 of 31 with a scripted model | **No real-model run yet.** The gold answers have not been checked by hand. |
-| Tests | 232 unit and pipeline tests | |
+| Literature extraction (benchmark D, 5 papers, 65 labelled cells) | Oracle self-test 100% on accuracy, citation precision and recall, and not-found accuracy, including both planted cases | Synthetic papers; **no real-model run yet**. Real papers still need collecting and labelling. |
+| Tests | 264 unit and pipeline tests | |
 
 The real-model benchmarks (chat accuracy on 120 to 150 questions, planted-issue detection, verdict agreement on 60 hand-labelled pairs) are Phase 5 in [plan.md](plan.md). They need an API key with enough quota and hand-checked labels.
 
@@ -102,5 +107,5 @@ The real-model benchmarks (chat accuracy on 120 to 150 questions, planted-issue 
 - **CSV only.** No Excel, SPSS, Stata or Parquet upload yet.
 - **The AI steps depend on the model.** Parsing questions, mapping them to columns, and chat quality vary with the model, and have not yet been benchmarked against a real model.
 - **No collaboration.** Each project belongs to one user.
-
-Next on the roadmap is a literature-review module (Phase 7 in [plan.md](plan.md)): upload a folder of papers and get a review table where each cell cites the exact sentence it came from.
+- **Papers need a text layer.** Scanned PDFs are detected but not OCR'd. Equations are skipped, and tables are cited by their caption.
+- **Paper metadata is heuristic.** Title and authors come from the first page's layout; correct them when the parser gets them wrong (they are editable).

@@ -1,0 +1,65 @@
+{"paper": "defect-gnn", "column": "paper_title", "found": true, "value": "Graph Neural Networks for Cross-Project Defect Prediction"}
+{"paper": "defect-gnn", "column": "authors", "found": true, "value": ["Maria Okafor", "Daniel Brandt", "Wei Zhang"]}
+{"paper": "defect-gnn", "column": "year", "found": true, "value": 2023}
+{"paper": "defect-gnn", "column": "problem_statement", "found": true, "key_terms": ["cross-project|cross project", "metric"], "support": [["The problem we address is that cross-project predictors", "Defect prediction models trained on one project often fail"]]}
+{"paper": "defect-gnn", "column": "research_questions", "found": true, "key_terms": ["graph", "structural"], "support": [["RQ1: Does a graph representation"], ["RQ2: Which structural patterns"]]}
+{"paper": "defect-gnn", "column": "approach", "found": true, "key_terms": ["graph neural network|gated graph|graph", "syntax tree|ast"], "support": [["GraphDP parses each Java file", "A three-layer gated graph neural network", "We propose GraphDP, a defect predictor"]]}
+{"paper": "defect-gnn", "column": "datasets", "found": true, "key_terms": ["promise", "18"], "support": [["We use 18 open-source Java projects from the PROMISE repository", "On 18 projects from the PROMISE repository"]]}
+{"paper": "defect-gnn", "column": "metrics", "found": true, "key_terms": ["f1", "auc|roc"], "support": [["We report precision, recall, F1 score and the area under the ROC curve"]]}
+{"paper": "defect-gnn", "column": "results", "found": true, "key_terms": ["0.64", "0.52|0.78"], "support": [["GraphDP achieves a mean F1 score of 0.64", "GraphDP reaches a mean F1 score of 0.64"], ["The best baseline, TCA+, reaches a mean F1 score of 0.52", "GraphDP achieves a mean F1 score of 0.64"]]}
+{"paper": "defect-gnn", "column": "key_findings", "found": true, "key_terms": ["transfer|structural"], "support": [["Structural features learned from code graphs transfer", "The results suggest that structural code features transfer", "GraphDP achieves a mean F1 score of 0.64"]]}
+{"paper": "defect-gnn", "column": "limitations", "found": true, "key_terms": ["java", "label|hyperparameter|tun"], "support": [["Our study only covers Java projects"], ["The PROMISE defect labels come from issue trackers", "We did not tune the hyperparameters"]]}
+{"paper": "defect-gnn", "column": "conclusion", "found": true, "key_terms": ["transfer"], "support": [["Structural features learned from code graphs transfer"]]}
+{"paper": "defect-gnn", "column": "future_work", "found": true, "key_terms": ["python", "explain"], "support": [["In future work we plan to evaluate GraphDP on Python"]]}
+{"paper": "sleep-students", "column": "paper_title", "found": true, "value": "Sleep Duration and Academic Performance in First-Year University Students: A Longitudinal Survey"}
+{"paper": "sleep-students", "column": "authors", "found": true, "value": ["Chidi Okonkwo", "Astrid Lindqvist"]}
+{"paper": "sleep-students", "column": "year", "found": true, "value": 2021}
+{"paper": "sleep-students", "column": "problem_statement", "found": true, "key_terms": ["sleep", "grade|academic|performance"], "support": [["cross-sectional designs cannot show whether short sleep precedes", "Our aim was to describe how weeknight sleep duration", "its link with grades over a whole academic year is not well understood"]]}
+{"paper": "sleep-students", "column": "research_questions", "found": true, "key_terms": ["sleep"], "support": [["Our aim was to describe how weeknight sleep duration"]], "optional": true, "note": "The paper states an aim, not explicit research questions."}
+{"paper": "sleep-students", "column": "approach", "found": true, "key_terms": ["diar|longitudinal|survey", "mixed model|regression|adjust"], "support": [["We fitted linear mixed models"], ["monthly sleep diaries", "Each diary recorded bedtime", "We followed 1,204 first-year students"]]}
+{"paper": "sleep-students", "column": "datasets", "found": true, "key_terms": ["1,204|1204"], "support": [["1,204 students (30.5%) consented", "We followed 1,204 first-year students"]]}
+{"paper": "sleep-students", "column": "metrics", "found": true, "key_terms": ["gpa|grade point average"], "support": [["Grade point average (GPA) on a scale from 0 to 5"]]}
+{"paper": "sleep-students", "column": "results", "found": true, "key_terms": ["0.31"], "support": [["had an adjusted GPA that was 0.31 points lower", "had a grade point average 0.31 points lower"]]}
+{"paper": "sleep-students", "column": "key_findings", "found": true, "key_terms": ["0.31|lower grade|lower gpa|associated|lower"], "support": [["had an adjusted GPA that was 0.31 points lower", "Short sleep was associated with lower grades", "had a grade point average 0.31 points lower", "Weeknight sleep of less than six hours is common"]]}
+{"paper": "sleep-students", "column": "limitations", "found": true, "key_terms": ["self-report|diar|actigraphy", "observational|conscientious"], "support": [["Sleep was self-reported in diaries"], ["Because the study is observational", "Sleep was self-reported in diaries"]]}
+{"paper": "sleep-students", "column": "conclusion", "found": true, "key_terms": ["six hours|short sleep"], "support": [["Weeknight sleep of less than six hours is common"]]}
+{"paper": "sleep-students", "column": "future_work", "found": true, "key_terms": ["randomised|trial|intervention"], "support": [["randomised trials of sleep interventions are needed", "Universities should consider sleep"]]}
+{"paper": "no-limitations", "column": "paper_title", "found": true, "value": "How Developers Review Test Code: An Exploratory Interview Study"}
+{"paper": "no-limitations", "column": "authors", "found": true, "value": ["Priya Raman", "Tomas Novak"]}
+{"paper": "no-limitations", "column": "year", "found": true, "value": 2022}
+{"paper": "no-limitations", "column": "problem_statement", "found": true, "key_terms": ["test code", "review"], "support": [["the review of test code has received less attention", "little is known about how reviewers treat test code", "We set out to understand what reviewers look for"]]}
+{"paper": "no-limitations", "column": "research_questions", "found": false, "optional": true, "note": "No explicit research questions; the aim may be reported instead."}
+{"paper": "no-limitations", "column": "approach", "found": true, "key_terms": ["interview"], "support": [["We conducted semi-structured interviews with 14 developers", "We interviewed 14 developers"]]}
+{"paper": "no-limitations", "column": "datasets", "found": true, "key_terms": ["14"], "support": [["We conducted semi-structured interviews with 14 developers", "We interviewed 14 developers"]]}
+{"paper": "no-limitations", "column": "metrics", "found": false, "note": "A qualitative study: no evaluation measures."}
+{"paper": "no-limitations", "column": "results", "found": true, "key_terms": ["less time|eleven|11"], "support": [["Eleven of the 14 developers said", "Reviewers reported spending less time on test code"]]}
+{"paper": "no-limitations", "column": "key_findings", "found": true, "key_terms": ["less time|less scrutiny|exist"], "support": [["Test code receives less scrutiny", "Reviewers most often checked whether a change came with tests", "Eleven of the 14 developers", "Reviewers reported spending less time on test code"]]}
+{"paper": "no-limitations", "column": "limitations", "found": false, "note": "Planted: the paper has no limitations section and does not discuss any."}
+{"paper": "no-limitations", "column": "conclusion", "found": true, "key_terms": ["less scrutiny|less time"], "support": [["Test code receives less scrutiny in review"]]}
+{"paper": "no-limitations", "column": "future_work", "found": false, "optional": true, "note": "Only a suggestion for review tools, no stated future work."}
+{"paper": "abstract-disagree", "column": "paper_title", "found": true, "value": "Lightweight Convolutional Networks for Skin Lesion Classification on Mobile Phones"}
+{"paper": "abstract-disagree", "column": "authors", "found": true, "value": ["Laura Benedetti", "Samuel Adeyemi", "Hannah Kowalski"]}
+{"paper": "abstract-disagree", "column": "year", "found": true, "value": 2024}
+{"paper": "abstract-disagree", "column": "problem_statement", "found": true, "key_terms": ["phone|mobile|device"], "support": [["Existing classifiers reach high accuracy but need server-class hardware", "We ask whether a small network can match larger models", "Dermatology screening apps need models that run on ordinary phones"]]}
+{"paper": "abstract-disagree", "column": "research_questions", "found": true, "key_terms": ["small network|phone|device"], "support": [["We ask whether a small network can match larger models"]], "optional": true}
+{"paper": "abstract-disagree", "column": "approach", "found": true, "key_terms": ["depthwise|separable|convolution"], "support": [["DermaLite stacks depthwise separable convolutions", "We present DermaLite, a convolutional network"]]}
+{"paper": "abstract-disagree", "column": "datasets", "found": true, "key_terms": ["ham10000"], "support": [["We train and test on the HAM10000 dataset", "On the HAM10000 dataset"]]}
+{"paper": "abstract-disagree", "column": "metrics", "found": true, "key_terms": ["accuracy", "time|inference"], "support": [["We report top-1 accuracy, balanced accuracy and inference time"]]}
+{"paper": "abstract-disagree", "column": "results", "found": true, "key_terms": ["89.4"], "support": [["DermaLite reaches 89.4% top-1 accuracy"]], "forbidden": ["91.2"], "note": "Planted: the abstract reports 91.2% from a leaky split; the corrected result is 89.4%."}
+{"paper": "abstract-disagree", "column": "key_findings", "found": true, "key_terms": ["phone|small|89.4|38"], "support": [["A network small enough to run on a phone", "DermaLite reaches 89.4% top-1 accuracy", "Inference takes 38 milliseconds"]], "forbidden": ["91.2"]}
+{"paper": "abstract-disagree", "column": "limitations", "found": true, "key_terms": ["skin", "dermatoscop|camera"], "support": [["HAM10000 contains mostly images of patients with light skin"], ["The images come from dermatoscopes"]]}
+{"paper": "abstract-disagree", "column": "conclusion", "found": true, "key_terms": ["phone"], "support": [["A network small enough to run on a phone"]]}
+{"paper": "abstract-disagree", "column": "future_work", "found": true, "key_terms": ["camera|skin type|prospective"], "support": [["Future work will collect phone-camera images"]]}
+{"paper": "mindfulness-rct", "column": "paper_title", "found": true, "value": "A Smartphone Mindfulness Programme for Generalised Anxiety: A Randomised Controlled Trial"}
+{"paper": "mindfulness-rct", "column": "authors", "found": true, "value": ["Elena Hernandez", "Thomas Whitfield"]}
+{"paper": "mindfulness-rct", "column": "year", "found": true, "value": 2022}
+{"paper": "mindfulness-rct", "column": "problem_statement", "found": true, "key_terms": ["anxiety", "wait|digital|evidence|therapy"], "support": [["Self-guided digital programmes could provide help sooner", "many people wait months for psychological therapy", "evidence from randomised trials is limited"]]}
+{"paper": "mindfulness-rct", "column": "research_questions", "found": true, "key_terms": ["mindfulness", "anxiety"], "support": [["We hypothesised that an eight-week smartphone mindfulness programme"]]}
+{"paper": "mindfulness-rct", "column": "approach", "found": true, "key_terms": ["randomi", "waiting list|wait-list|waitlist"], "support": [["Participants were randomised 1:1 to the programme or to a waiting list", "In a randomised controlled trial with 412 adults"]]}
+{"paper": "mindfulness-rct", "column": "datasets", "found": true, "key_terms": ["412"], "support": [["Of 412 randomised adults", "In a randomised controlled trial with 412 adults"]]}
+{"paper": "mindfulness-rct", "column": "metrics", "found": true, "key_terms": ["gad-7"], "support": [["The primary outcome was the GAD-7 score at eight weeks"]]}
+{"paper": "mindfulness-rct", "column": "results", "found": true, "key_terms": ["2.9"], "support": [["GAD-7 scores were 2.9 points lower", "the programme reduced GAD-7 scores by 2.9 points"]]}
+{"paper": "mindfulness-rct", "column": "key_findings", "found": true, "key_terms": ["anxiety|gad-7"], "support": [["The programme produced a moderate reduction in anxiety", "GAD-7 scores were 2.9 points lower", "reduces anxiety symptoms in the short term", "the programme reduced GAD-7 scores by 2.9 points"]]}
+{"paper": "mindfulness-rct", "column": "limitations", "found": true, "key_terms": ["waiting list|attention|expectation", "self-report|eight weeks|follow-up"], "support": [["A limitation is that a waiting list does not control"], ["Outcomes were self-reported, and follow-up lasted only eight weeks"]]}
+{"paper": "mindfulness-rct", "column": "conclusion", "found": true, "key_terms": ["anxiety"], "support": [["A self-guided smartphone mindfulness programme reduces anxiety"]]}
+{"paper": "mindfulness-rct", "column": "future_work", "found": true, "key_terms": ["active control|longer follow-up"], "support": [["Trials with an active control and longer follow-up are needed"]]}

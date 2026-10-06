@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpenText,
   ChartNoAxesColumn,
   LayoutGrid,
   Lightbulb,
@@ -33,6 +34,12 @@ export function ProjectTabs({ projectId }: { projectId: number }) {
       label: "Insights",
       icon: Lightbulb,
       match: new RegExp(`^${base}/insights`),
+    },
+    {
+      href: `${base}/literature`,
+      label: "Literature",
+      icon: BookOpenText,
+      match: new RegExp(`^${base}/literature`),
     },
     {
       href: `${base}/chat`,
