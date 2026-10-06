@@ -23,6 +23,7 @@ from api.db.models import (
 )
 from api.db.session import get_sessionmaker
 from api.ingest.combine import CombinePlan, SourceTable, join_plan, stack_plan
+from api.ingest.formats import file_kind
 from api.ingest.loader import LoadReport
 from api.ingest.pipeline import run_combine_plan, run_joins, run_load, run_pii, run_profile
 from api.insights.jobs import generate_insights
@@ -66,17 +67,20 @@ async def _set_status(dataset_id: int, status: str, error: str | None = None) ->
 
 
 async def ingest_dataset(ctx: dict[str, Any], dataset_id: int) -> str:
-    """Load an uploaded CSV into the project's DuckDB file and profile it."""
+    """Load an uploaded file (CSV, Excel, SPSS, Stata or Parquet) into the project's DuckDB
+    file and profile it."""
     async with get_sessionmaker()() as session:
         dataset = await session.get(Dataset, dataset_id)
         if dataset is None:
             return "missing"
         project_id, table_name = dataset.project_id, dataset.table_name
+        filename = dataset.original_filename
+
+    path = upload_path(project_id, dataset_id, filename)
+    kind = file_kind(filename) or "csv"
 
     async def load(db_path: Path) -> LoadReport:
-        return await asyncio.to_thread(
-            run_load, db_path, upload_path(project_id, dataset_id), table_name
-        )
+        return await asyncio.to_thread(run_load, db_path, path, table_name, kind)
 
     return await _build(ctx, dataset_id, project_id, load, detect_joins=True)
 
@@ -200,6 +204,9 @@ async def _build(
                 profile_json=r.profile,
                 is_pii=pii[r.column.name].is_pii,
                 pii_reason=pii[r.column.name].reason,
+                # Variable labels from SPSS or Stata files count as a data dictionary.
+                description=report.descriptions.get(r.column.name),
+                description_source="dictionary" if r.column.name in report.descriptions else None,
             )
             for r in profile.columns
         )

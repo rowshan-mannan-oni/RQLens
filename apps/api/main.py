@@ -21,6 +21,7 @@ from api.routes import (
     report,
     review,
     rqs,
+    sharing,
     usage,
 )
 
@@ -58,3 +59,4 @@ app.include_router(usage.router)
 app.include_router(papers.router)
 app.include_router(review.templates_router)
 app.include_router(review.router)
+app.include_router(sharing.router)

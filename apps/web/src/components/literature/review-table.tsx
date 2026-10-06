@@ -10,6 +10,7 @@ import {
   Download,
   FileText,
   LoaderCircle,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -46,11 +47,13 @@ import {
 } from "@/app/projects/[id]/literature/actions";
 import type { ActionState } from "@/components/confirm-dialog";
 import { PdfReader } from "@/components/literature/pdf-reader";
+import { CommentThread } from "@/components/sharing/comment-thread";
 import type {
   CellValue,
   Citation,
   ColumnKind,
   Paper,
+  ProjectComment,
   RelatedPapers,
   ReviewCell,
   ReviewTable,
@@ -133,17 +136,29 @@ function useNarrow(): boolean {
 }
 
 const NO_WIDTHS: Record<string, number> = {};
+const NO_COMMENTS: ProjectComment[] = [];
 const NO_PINS: string[] = [];
 
 export function ReviewTableView({
   projectId,
   table,
   questions,
+  comments,
+  canModerate,
 }: {
   projectId: number;
   table: ReviewTable;
   questions: { id: number; text: string }[];
+  comments: ProjectComment[];
+  canModerate: boolean;
 }) {
+  const commentsByCell = useMemo(() => {
+    const m = new Map<number, ProjectComment[]>();
+    for (const c of comments)
+      if (c.target_id != null)
+        m.set(c.target_id, [...(m.get(c.target_id) ?? []), c]);
+    return m;
+  }, [comments]);
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -515,6 +530,12 @@ export function ReviewTableView({
                             }),
                           )
                         }
+                        projectId={projectId}
+                        comments={
+                          commentsByCell.get(cellOf(p.id, c.key)?.id ?? -1) ??
+                          NO_COMMENTS
+                        }
+                        canModerate={canModerate}
                       />
                     </td>
                   ))}
@@ -636,6 +657,7 @@ function Toolbar({
             {table.name}
             <button
               type="button"
+              data-edit
               className="btn btn-ghost btn-sm"
               onClick={() => setEditing(true)}
               aria-label="Rename table"
@@ -708,6 +730,7 @@ function Toolbar({
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
+            data-edit
             type="button"
             className="btn btn-secondary btn-sm"
             disabled={pending}
@@ -744,6 +767,7 @@ function Toolbar({
             </div>
           </details>
           <button
+            data-edit
             type="button"
             className="btn btn-ghost btn-sm hover:text-red-600"
             disabled={pending}
@@ -813,10 +837,12 @@ function Popover({
   label,
   children,
   className,
+  editOnly,
 }: {
   label: string;
   children: (close: () => void) => React.ReactNode;
   className?: string;
+  editOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -836,6 +862,7 @@ function Popover({
   return (
     <div
       ref={ref}
+      data-edit={editOnly || undefined}
       data-open={open || undefined}
       className={`data-[open]:opacity-100 ${className?.includes("absolute") ? "" : "relative"} ${className ?? ""}`}
     >
@@ -868,16 +895,19 @@ function MenuItem({
   onClick,
   danger,
   disabled,
+  edit = true,
 }: {
   icon: typeof Pin;
   children: React.ReactNode;
   onClick: () => void;
   danger?: boolean;
   disabled?: boolean;
+  edit?: boolean; // hidden for viewers
 }) {
   return (
     <button
       type="button"
+      data-edit={edit || undefined}
       disabled={disabled}
       onClick={onClick}
       className={`hover:bg-surface-3 flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left disabled:opacity-40 ${
@@ -915,6 +945,7 @@ function ColumnMenu({
   return (
     <>
       <Popover
+        editOnly
         label={`Column options for ${column.label}`}
         className="pt-1.5 pr-1.5"
       >
@@ -1027,6 +1058,7 @@ function AddColumnButton({
   return (
     <>
       <button
+        data-edit
         type="button"
         className="btn btn-ghost btn-sm whitespace-nowrap"
         onClick={() => dialog.current?.showModal()}
@@ -1166,6 +1198,7 @@ function PaperHeader({
         )}
       </div>
       <Popover
+        editOnly
         label={`Options for ${p.title ?? p.filename}`}
         className="opacity-0 group-hover/row:opacity-100 focus-within:opacity-100"
       >
@@ -1204,7 +1237,13 @@ function CellView({
   onRevert,
   onReview,
   onRerun,
+  projectId,
+  comments,
+  canModerate,
 }: {
+  projectId: number;
+  comments: ProjectComment[];
+  canModerate: boolean;
   paper: Paper;
   column: TemplateColumn;
   cell: ReviewCell | undefined;
@@ -1217,6 +1256,8 @@ function CellView({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [discuss, setDiscuss] = useState(false);
+  const openComments = comments.filter((c) => !c.resolved).length;
 
   if (paper.status !== "ready")
     return (
@@ -1325,6 +1366,17 @@ function CellView({
             PDF metadata
           </span>
         )}
+        {openComments > 0 && (
+          <button
+            type="button"
+            className="badge badge-brand"
+            onClick={() => setDiscuss(true)}
+            title="Open the comments on this cell"
+          >
+            <MessageSquare className="h-3 w-3" aria-hidden />
+            {openComments}
+          </button>
+        )}
         {cell.review === "accepted" && (
           <span className="badge badge-success">
             <Check className="h-3 w-3" aria-hidden />
@@ -1336,6 +1388,16 @@ function CellView({
         )}
       </div>
 
+      {discuss && (
+        <CellComments
+          projectId={projectId}
+          cellId={cell.id}
+          title={`${column.label} \u00b7 ${paper.title ?? paper.filename}`}
+          comments={comments}
+          canModerate={canModerate}
+          onClose={() => setDiscuss(false)}
+        />
+      )}
       <Popover
         label="Cell options"
         className="absolute -top-1 -right-1 opacity-0 group-hover/cell:opacity-100 focus-within:opacity-100"
@@ -1344,6 +1406,13 @@ function CellView({
           <>
             <MenuItem icon={Pencil} onClick={() => (close(), setEditing(true))}>
               Edit value
+            </MenuItem>
+            <MenuItem
+              icon={MessageSquare}
+              edit={false}
+              onClick={() => (close(), setDiscuss(true))}
+            >
+              Comments{comments.length > 0 ? ` (${comments.length})` : ""}
             </MenuItem>
             {cell.status !== "not_found" && cell.status !== "failed" && (
               <>
@@ -1478,5 +1547,62 @@ function CellEditor({
         Your value is kept when the table is re-run.
       </p>
     </form>
+  );
+}
+
+function CellComments({
+  projectId,
+  cellId,
+  title,
+  comments,
+  canModerate,
+  onClose,
+}: {
+  projectId: number;
+  cellId: number;
+  title: string;
+  comments: ProjectComment[];
+  canModerate: boolean;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) ref.current.close();
+      }}
+      className="border-line bg-surface text-fg shadow-pop m-auto w-[calc(100%-2rem)] max-w-lg rounded-2xl border p-0 text-left font-normal backdrop:bg-black/40"
+    >
+      <div className="flex flex-col gap-4 p-6">
+        <div>
+          <p className="eyebrow">Comments</p>
+          <h2 className="mt-1 line-clamp-2 font-semibold tracking-tight">
+            {title}
+          </h2>
+        </div>
+        <CommentThread
+          projectId={projectId}
+          targetType="cell"
+          targetId={cellId}
+          comments={comments}
+          canModerate={canModerate}
+          placeholder="Comment on this value"
+        />
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => ref.current?.close()}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </dialog>
   );
 }

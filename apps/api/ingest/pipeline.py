@@ -11,7 +11,8 @@ import duckdb
 
 from api.config import get_settings
 from api.ingest.combine import CombinePlan, run_combine
-from api.ingest.loader import LoadReport, load_csv
+from api.ingest.formats import load_file
+from api.ingest.loader import LoadReport
 from api.ingest.names import quote
 from api.profiler.joins import JoinTable, find_joins
 from api.profiler.tables import DatasetProfile, profile_table
@@ -30,9 +31,9 @@ def connect(db_path: Path, *, read_only: bool = False) -> duckdb.DuckDBPyConnect
     )
 
 
-def run_load(db_path: Path, csv_path: Path, table_name: str) -> LoadReport:
+def run_load(db_path: Path, path: Path, table_name: str, kind: str = "csv") -> LoadReport:
     with connect(db_path) as con:
-        return load_csv(con, csv_path, table_name)
+        return load_file(con, path, table_name, kind)
 
 
 def run_combine_plan(db_path: Path, table_name: str, plan: CombinePlan) -> LoadReport:

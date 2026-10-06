@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     max_datasets_per_project: int = 50
     max_papers_per_project: int = 200
     max_paper_bytes: int = 50 * 1024 * 1024
+    # Scanned pages are read with OCR (the `ocr` extra) when this is on; at most this many
+    # pages per paper, since OCR takes a few seconds per page.
+    ocr_enabled: bool = True
+    max_ocr_pages: int = 60
     # AI use per calendar month (UTC), summed over the user's projects. Free-tier models cost
     # nothing, so the call count is the limit that applies to them.
     monthly_llm_budget_usd: float = 5.0

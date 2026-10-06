@@ -2,7 +2,7 @@
 
 **Know what your data can answer before you design the study.**
 
-RQ Lens is a companion for researchers working with a tabular dataset. Upload CSV files and write your research questions. RQ Lens profiles every column, tells you whether each question is answerable with this data and why, ranks exploratory findings, and answers questions in plain language. Every number on screen comes from a logged SQL query you can open and rerun.
+RQ Lens is a companion for researchers working with a tabular dataset. Upload your data (CSV, Excel, SPSS, Stata or Parquet) and write your research questions. RQ Lens profiles every column, tells you whether each question is answerable with this data and why, ranks exploratory findings, and answers questions in plain language. Every number on screen comes from a logged SQL query you can open and rerun.
 
 ![RQ Fit page](docs/rq-fit.png)
 
@@ -12,12 +12,15 @@ RQ Lens is a companion for researchers working with a tabular dataset. Upload CS
 
 | Feature | How it works |
 |---|---|
+| **Data files** | CSV, Excel, SPSS (`.sav`, `.zsav`, `.por`), Stata (`.dta`) and Parquet. SPSS and Stata variable labels fill the data dictionary; fully labelled codes become their labels, and user-defined missing values ("9 = Refused") become missing, with a note. |
 | **Profiling** | Pure SQL in DuckDB, with no AI involved. It finds types, missing values, distributions, outliers, correlations, missing-data patterns and join keys, plus rule-based warnings for placeholder codes such as `-999`, label leakage, unit changes and near-duplicate columns. |
 | **Research-question fit** | An LLM parses each question and maps its constructs to columns. Guarded SQL checks then measure rows in scope, missing values, group sizes, outcome variation, time coverage and statistical power. **Fixed rules** give the verdict: answerable, partly answerable or not answerable. The LLM only writes the explanation, and every number in it must appear in a query result. |
 | **Insights** | Up to 20 analyses are planned from your questions and the profile, then run with a fixed statistics library (Spearman, Mann-Whitney U, Kruskal-Wallis, chi-square, trend). Results are corrected with Benjamini-Hochberg, ranked by relevance, effect size and support (not p-value), and re-tested within subgroups to catch confounding. |
 | **Chat** | A bounded tool-using agent (schema, profiles, column search, read-only SQL, statistical tests, charts). Answers stream back with their queries, and an answer with a number not found in any tool result is rejected. |
 | **Literature review** | Upload PDFs or a whole folder. Each paper is split into numbered sentences with their positions on the page, and the AI fills a review table (built-in templates or your own), citing sentence IDs with quotes. A check without AI verifies every quote and number against the cited sentence; failures are retried once, then marked *unverified*. Click a citation to open the PDF at that page with the sentence highlighted. Edits are never overwritten; exports to CSV, Excel, Markdown and BibTeX. |
 | **Dataset report** | A Markdown or PDF report with an overview, data dictionary, quality warnings, question fit, top insights and limitations. It works as a draft of a paper's data section. |
+| **Sharing and comments** | Share a project by email with viewers (read and comment) or editors (also change data, questions and tables). Comment threads on the project, each research question and each literature-table cell, with resolve. |
+| **Reference libraries** | Import a BibTeX or RIS export from Zotero, Mendeley or EndNote: papers get exact metadata and citation keys, matched by DOI or title, including PDFs uploaded later. Scanned papers are read with OCR. |
 | **Usage and limits** | Every AI call and query is logged. The Usage page shows calls, tokens, cost and latency (average and p95) per project. Per-user limits cover projects, datasets, upload size and monthly AI calls and spend. |
 
 To try it without your own data, click **Try a sample project**. This loads the Palmer penguins data with three research questions, and works without an AI key.
@@ -104,8 +107,8 @@ The real-model benchmarks (chat accuracy on 120 to 150 questions, planted-issue 
 - **One table per question.** Feasibility checks and insights work within one table; multi-table questions need a combined dataset first (the Combine feature).
 - **Placeholder codes are flagged, not replaced.** Values such as `-999` cannot be told apart from real values without a data dictionary. Upload one to resolve them. A real category spelled `None` is also treated as missing.
 - **Candidate keys are single columns.** Composite keys are not detected.
-- **CSV only.** No Excel, SPSS, Stata or Parquet upload yet.
+- **Old Excel files.** `.xls` is not read; save it as `.xlsx`. Only the first sheet with data is loaded.
 - **The AI steps depend on the model.** Parsing questions, mapping them to columns, and chat quality vary with the model, and have not yet been benchmarked against a real model.
-- **No collaboration.** Each project belongs to one user.
-- **Papers need a text layer.** Scanned PDFs are detected but not OCR'd. Equations are skipped, and tables are cited by their caption.
-- **Paper metadata is heuristic.** Title and authors come from the first page's layout; correct them when the parser gets them wrong (they are editable).
+- **Sharing has no notifications.** Owners share by email as viewer or editor, but no email is sent; send the project link yourself. Comments do not notify anyone either.
+- **OCR is approximate.** Scanned pages are read with OCR (a few seconds per page, at most 60 pages), which can misread characters; check quotes from OCR'd pages. Equations are skipped, and tables are cited by their caption.
+- **Paper metadata is heuristic** unless you import a BibTeX or RIS file. Title and authors come from the first page's layout; correct them when the parser gets them wrong (they are editable).

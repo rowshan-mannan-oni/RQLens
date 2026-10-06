@@ -7,8 +7,14 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { NewTableForm } from "@/components/literature/new-table-form";
 import { PaperList } from "@/components/literature/paper-list";
 import { PaperUpload } from "@/components/literature/paper-upload";
+import { ReferenceImport } from "@/components/literature/reference-import";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { Paper, ReviewTableSummary, ReviewTemplate } from "@/lib/types";
+import type {
+  Paper,
+  ReferenceEntry,
+  ReviewTableSummary,
+  ReviewTemplate,
+} from "@/lib/types";
 import { createTable } from "./actions";
 
 export default async function LiteraturePage(
@@ -21,11 +27,13 @@ export default async function LiteraturePage(
   let papers: Paper[];
   let tables: ReviewTableSummary[];
   let templates: ReviewTemplate[];
+  let references: ReferenceEntry[];
   try {
-    [papers, tables, templates] = await Promise.all([
+    [papers, tables, templates, references] = await Promise.all([
       apiFetch<Paper[]>(`/projects/${id}/papers`),
       apiFetch<ReviewTableSummary[]>(`/projects/${id}/review-tables`),
       apiFetch<ReviewTemplate[]>(`/templates`),
+      apiFetch<ReferenceEntry[]>(`/projects/${id}/papers/references`),
     ]);
   } catch (e) {
     if (e instanceof ApiError && (e.status === 404 || e.status === 422))
@@ -106,7 +114,7 @@ export default async function LiteraturePage(
       </div>
 
       <aside className="flex flex-col gap-4">
-        <div className="card flex flex-col gap-3 p-5">
+        <div data-edit className="card flex flex-col gap-3 p-5">
           <h3 className="font-semibold">New table</h3>
           <NewTableForm
             projectId={projectId}
@@ -120,6 +128,7 @@ export default async function LiteraturePage(
             </p>
           )}
         </div>
+        <ReferenceImport projectId={projectId} entries={references} />
         <div className="card-muted flex flex-col gap-3 p-5 text-sm">
           <p className="flex items-start gap-2">
             <Quote className="text-brand mt-0.5 h-4 w-4 shrink-0" aria-hidden />

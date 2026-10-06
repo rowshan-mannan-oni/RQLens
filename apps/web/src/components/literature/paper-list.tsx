@@ -104,13 +104,21 @@ function PaperRow({
           </p>
         )}
       </div>
+      {p.ocr_pages_json && p.ocr_pages_json.length > 0 && (
+        <span
+          className="badge badge-neutral shrink-0"
+          title={`Read with OCR: page${p.ocr_pages_json.length > 1 ? "s" : ""} ${p.ocr_pages_json.join(", ")}`}
+        >
+          OCR
+        </span>
+      )}
       <span className={`badge ${status.className} shrink-0`}>
         {(p.status === "queued" || p.status === "parsing") && (
           <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden />
         )}
         {status.label}
       </span>
-      <div className="flex shrink-0 items-center gap-1">
+      <div data-edit className="flex shrink-0 items-center gap-1">
         {p.status === "ready" && (
           <MetadataDialog projectId={projectId} paper={p} />
         )}

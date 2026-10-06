@@ -37,6 +37,7 @@ export function MappingEditor({
   if (!open)
     return (
       <button
+        data-edit
         type="button"
         onClick={() => setOpen(true)}
         className="btn btn-secondary btn-sm w-fit"

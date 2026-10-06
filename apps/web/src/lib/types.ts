@@ -7,6 +7,8 @@ export type Project = {
   status: string;
   share_samples: boolean;
   created_at: string;
+  role: "owner" | "editor" | "viewer";
+  owner: string | null;
 };
 
 export type DatasetStatus =
@@ -507,6 +509,8 @@ export type Paper = {
   venue: string | null;
   doi: string | null;
   metadata_source_json: Record<string, string> | null;
+  ocr_pages_json: number[] | null;
+  cite_key: string | null;
   created_at: string;
 };
 
@@ -600,4 +604,41 @@ export type RelatedPapers = {
     matched_terms: string[];
     cells: { column_key: string; terms: string[] }[];
   }[];
+};
+
+export type ReferenceEntry = {
+  id: number;
+  cite_key: string;
+  kind: string | null;
+  title: string | null;
+  authors_json: string[] | null;
+  year: number | null;
+  venue: string | null;
+  doi: string | null;
+  files_json: string[] | null;
+  paper_id: number | null;
+};
+
+// Sharing and comments (apps/api/routes/sharing.py)
+
+export type Member = {
+  id: number | null; // null for the owner
+  email: string;
+  name: string | null;
+  role: "owner" | "editor" | "viewer";
+  joined: boolean;
+};
+
+export type CommentTarget = "project" | "rq" | "cell" | "insight" | "paper";
+
+export type ProjectComment = {
+  id: number;
+  target_type: CommentTarget;
+  target_id: number | null;
+  body: string;
+  resolved: boolean;
+  author: string;
+  mine: boolean;
+  created_at: string;
+  edited_at: string | null;
 };

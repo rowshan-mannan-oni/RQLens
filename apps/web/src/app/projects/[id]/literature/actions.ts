@@ -105,6 +105,14 @@ export async function updatePaper(
   );
 }
 
+export async function clearReferences(projectId: number): Promise<ActionState> {
+  return call(
+    `/projects/${projectId}/papers/references`,
+    { method: "DELETE" },
+    base(projectId),
+  );
+}
+
 // --- tables --------------------------------------------------------------------------------
 
 export async function createTable(

@@ -15,7 +15,7 @@ x-api-env-file: &api-env-file [{ path: .env.prod, required: false }]
 x-api-build: &api-build
   context: .
   dockerfile: apps/api/Dockerfile
-  args: { EXTRAS: sentry }
+  args: { EXTRAS: "sentry,ocr" }
 
 services:
   postgres:

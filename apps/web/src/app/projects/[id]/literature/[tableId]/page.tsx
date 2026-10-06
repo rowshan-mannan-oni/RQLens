@@ -4,7 +4,12 @@ import { auth } from "@/auth";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ReviewTableView } from "@/components/literature/review-table";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { ResearchQuestions, ReviewTable } from "@/lib/types";
+import type {
+  Project,
+  ProjectComment,
+  ResearchQuestions,
+  ReviewTable,
+} from "@/lib/types";
 
 export default async function ReviewTablePage(
   props: PageProps<"/projects/[id]/literature/[tableId]">,
@@ -14,10 +19,14 @@ export default async function ReviewTablePage(
   const { id, tableId } = await props.params;
   let table: ReviewTable;
   let rqs: ResearchQuestions;
+  let comments: ProjectComment[];
+  let project: Project;
   try {
-    [table, rqs] = await Promise.all([
+    [table, rqs, comments, project] = await Promise.all([
       apiFetch<ReviewTable>(`/projects/${id}/review-tables/${tableId}`),
       apiFetch<ResearchQuestions>(`/projects/${id}/rqs`),
+      apiFetch<ProjectComment[]>(`/projects/${id}/comments?target_type=cell`),
+      apiFetch<Project>(`/projects/${id}`),
     ]);
   } catch (e) {
     if (e instanceof ApiError && (e.status === 404 || e.status === 422))
@@ -42,6 +51,8 @@ export default async function ReviewTablePage(
           projectId={Number(id)}
           table={table}
           questions={rqs.questions.map((q) => ({ id: q.id, text: q.text }))}
+          comments={comments}
+          canModerate={project.role !== "viewer"}
         />
       </div>
     </>

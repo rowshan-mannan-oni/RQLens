@@ -120,3 +120,33 @@ def test_numbers_and_abbreviations_do_not_split_sentences(parsed):
     assert find(paper, "The improvement is statistically significant").text.endswith(
         "(Cliff's delta = 0.48)."
     )
+
+
+def test_scanned_pdf_read_with_ocr(pdfs):
+    pytest.importorskip("rapidocr_onnxruntime")
+    pytest.importorskip("wordninja")
+    spec = SPECS["no-limitations"]
+    result = parse_bytes(scanned_pdf(pdfs["no-limitations"], dpi=300), ocr=True)
+    assert not result.needs_ocr
+    assert result.ocr_pages == [1]
+    assert result.metadata.title == spec.title
+    assert result.metadata.authors == spec.authors
+    assert [s.kind for s in result.sections] == [
+        "abstract", "introduction", "method", "results", "conclusion", "references",
+    ]  # fmt: skip
+    method = find(result, "We conducted semi-structured interviews")
+    assert method.section_kind == "method"
+    assert method.text.endswith("in Central Europe.")
+    width, height = result.page_sizes[0]
+    for x0, y0, x1, y1 in method.rects:
+        assert 0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height
+
+
+def test_unglue_restores_spaces():
+    pytest.importorskip("wordninja")
+    from api.papers.ocr import unglue
+
+    assert unglue("Reviewersreportedspendinglesstime on test code.We agree") == (
+        "Reviewers reported spending less time on test code. We agree"
+    )
+    assert unglue("GraphDP uses e.g. ASTs") == "GraphDP uses e.g. ASTs"

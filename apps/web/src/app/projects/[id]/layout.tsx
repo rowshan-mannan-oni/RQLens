@@ -2,6 +2,8 @@ import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { auth } from "@/auth";
+import { ShareDialog } from "@/components/sharing/share-dialog";
 import { ProjectTabs } from "@/components/shell/project-tabs";
 import { ApiError, apiFetch } from "@/lib/api";
 import type { Project } from "@/lib/types";
@@ -12,6 +14,7 @@ export default async function ProjectLayout({
 }: LayoutProps<"/projects/[id]">) {
   const { id } = await params;
   let project: Project;
+  const session = await auth();
   try {
     project = await apiFetch<Project>(`/projects/${id}`);
   } catch (e) {
@@ -33,9 +36,24 @@ export default async function ProjectLayout({
             <ChevronRight className="h-3 w-3" aria-hidden />
             <span className="text-muted truncate">{project.title}</span>
           </nav>
-          <h1 className="mt-1.5 truncate text-2xl font-semibold tracking-tight">
-            {project.title}
-          </h1>
+          <div className="mt-1.5 flex items-center gap-3">
+            <h1 className="min-w-0 flex-1 truncate text-2xl font-semibold tracking-tight">
+              {project.title}
+            </h1>
+            <ShareDialog
+              projectId={project.id}
+              role={project.role}
+              myEmail={session?.user?.email?.toLowerCase() ?? null}
+            />
+          </div>
+          {project.role !== "owner" && (
+            <p className="text-muted mt-1 text-xs">
+              Shared by {project.owner ?? "its owner"} ·{" "}
+              {project.role === "viewer"
+                ? "you can view and comment"
+                : "you can edit; AI use counts against the owner's limit"}
+            </p>
+          )}
           {project.topic && (
             <p className="text-muted mt-1 line-clamp-2 max-w-3xl text-sm">
               {project.topic}
@@ -46,7 +64,10 @@ export default async function ProjectLayout({
           </div>
         </div>
       </div>
-      <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+      <div
+        data-role={project.role}
+        className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6"
+      >
         {children}
       </div>
     </>

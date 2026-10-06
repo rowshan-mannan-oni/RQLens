@@ -12,6 +12,7 @@ from sqlalchemy import select
 
 from api.config import get_settings
 from api.db.models import Dataset, DatasetColumn, TableProfile
+from api.ingest.formats import file_kind
 from api.ingest.names import sanitize_identifier
 from api.ingest.pipeline import drop_table
 from api.limits import WithinAIBudget, enforce_dataset_limit
@@ -80,8 +81,11 @@ async def upload_dataset(
     await enforce_dataset_limit(session, project.id)
     limit = get_settings().max_upload_bytes
     filename = Path(file.filename or "").name
-    if not filename.lower().endswith(".csv"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only .csv files are accepted")
+    if file_kind(filename) is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Upload a CSV, Excel (.xlsx), SPSS (.sav, .zsav, .por), Stata (.dta) or Parquet file",
+        )
     if file.size is not None and file.size > limit:
         raise HTTPException(
             status.HTTP_413_CONTENT_TOO_LARGE, f"File is larger than {limit // 2**20} MB"
@@ -89,7 +93,7 @@ async def upload_dataset(
 
     directory = uploads_dir(project.id)
     directory.mkdir(parents=True, exist_ok=True)
-    tmp = directory / f"tmp-{uuid.uuid4().hex}.csv"
+    tmp = directory / f"tmp-{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
     await asyncio.to_thread(_save, file, tmp)
     size = tmp.stat().st_size
     if size == 0:
@@ -109,7 +113,7 @@ async def upload_dataset(
     )
     session.add(dataset)
     await session.flush()
-    tmp.rename(upload_path(project.id, dataset.id))
+    tmp.rename(upload_path(project.id, dataset.id, filename))
     await session.commit()
     await session.refresh(dataset)
 
@@ -246,7 +250,7 @@ async def delete_dataset(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "The project is busy; try again shortly"
         ) from exc
-    upload_path(project.id, dataset.id).unlink(missing_ok=True)
+    upload_path(project.id, dataset.id, dataset.original_filename).unlink(missing_ok=True)
     # Columns, profiles and links are removed by ON DELETE CASCADE.
     await session.delete(dataset)
     await session.commit()

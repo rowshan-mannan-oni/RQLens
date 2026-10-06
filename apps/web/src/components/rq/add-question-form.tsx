@@ -19,7 +19,12 @@ export function AddQuestionForm({
     { error: null },
   );
   return (
-    <form ref={form} action={formAction} className="flex flex-col gap-2">
+    <form
+      data-edit
+      ref={form}
+      action={formAction}
+      className="flex flex-col gap-2"
+    >
       <label htmlFor="rq-text" className="section-title">
         Add a research question
       </label>
