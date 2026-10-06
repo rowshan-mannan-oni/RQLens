@@ -1,7 +1,6 @@
+import { ArrowRight, FolderOpen, Plus } from "lucide-react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
-import { auth, signOut } from "@/auth";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiFetch } from "@/lib/api";
 import type { Project } from "@/lib/types";
@@ -9,99 +8,116 @@ import type { Project } from "@/lib/types";
 import { deleteProject } from "./[id]/actions";
 import { createProject } from "./actions";
 
-const input =
-  "w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 dark:border-zinc-700";
-
 export default async function ProjectsPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/");
-
   const projects = await apiFetch<Project[]>("/projects");
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
-      <header className="flex items-center justify-between gap-4">
+    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
+      <div>
         <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+        <p className="lead mt-1">
+          A project holds your datasets, research questions, insights and chats
+          about one study.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/" });
-          }}
-          className="flex items-center gap-3 text-sm text-zinc-600 dark:text-zinc-400"
+          action={createProject}
+          className="card flex flex-col gap-3 border-dashed p-5"
         >
-          <span className="truncate">{session.user.email}</span>
-          <button className="underline hover:text-zinc-900 dark:hover:text-zinc-100">
-            Sign out
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="bg-brand-soft text-brand-fg grid h-8 w-8 place-items-center rounded-lg">
+              <Plus className="h-4 w-4" aria-hidden />
+            </span>
+            <h2 className="section-title">New project</h2>
+          </div>
+          <label className="sr-only" htmlFor="new-title">
+            Title
+          </label>
+          <input
+            id="new-title"
+            name="title"
+            required
+            maxLength={200}
+            placeholder="Title, e.g. Wage gaps in the 1985 CPS"
+            className="input"
+          />
+          <label className="sr-only" htmlFor="new-topic">
+            Research topic
+          </label>
+          <textarea
+            id="new-topic"
+            name="topic"
+            rows={2}
+            maxLength={5000}
+            placeholder="Research topic (optional, helps the AI)"
+            className="input resize-none"
+          />
+          <button className="btn btn-primary self-start">Create project</button>
         </form>
-      </header>
 
-      <form
-        action={createProject}
-        className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-      >
-        <h2 className="font-medium">New project</h2>
-        <input
-          name="title"
-          required
-          maxLength={200}
-          placeholder="Title"
-          className={input}
-        />
-        <textarea
-          name="topic"
-          rows={2}
-          maxLength={5000}
-          placeholder="Research topic (optional)"
-          className={input}
-        />
-        <button className="self-start rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300">
-          Create project
-        </button>
-      </form>
-
-      {projects.length === 0 ? (
-        <p className="text-zinc-600 dark:text-zinc-400">No projects yet.</p>
-      ) : (
-        <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-          {projects.map((p) => (
-            <li
-              key={p.id}
-              className="flex items-start justify-between gap-4 py-3"
-            >
-              <div className="min-w-0">
+        {projects.map((p) => (
+          <article
+            key={p.id}
+            className="card group hover:border-line-strong hover:shadow-pop relative flex flex-col gap-3 p-5 transition"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="bg-surface-3 text-muted grid h-8 w-8 shrink-0 place-items-center rounded-lg">
+                <FolderOpen className="h-4 w-4" aria-hidden />
+              </span>
+              <div className="relative z-10 opacity-100 transition sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+                <ConfirmDialog
+                  triggerLabel="Delete"
+                  triggerClassName="btn btn-sm btn-ghost"
+                  title={`Delete the project “${p.title}”?`}
+                  confirmLabel="Delete project"
+                  action={deleteProject.bind(null, p.id)}
+                >
+                  <p>
+                    This permanently removes all datasets, uploaded files,
+                    profiles, descriptions, query logs and AI call logs in this
+                    project.
+                  </p>
+                  <p className="mt-2 font-medium">This cannot be undone.</p>
+                </ConfirmDialog>
+              </div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate font-semibold tracking-tight">
                 <Link
                   href={`/projects/${p.id}`}
-                  className="font-medium hover:underline"
+                  className="after:absolute after:inset-0 after:rounded-xl"
                 >
                   {p.title}
                 </Link>
-                {p.topic && (
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {p.topic}
-                  </p>
-                )}
-                <p className="mt-1 text-xs text-zinc-500">
-                  {p.status} · created{" "}
-                  {new Date(p.created_at).toLocaleDateString()}
-                </p>
-              </div>
-              <ConfirmDialog
-                triggerLabel="Delete"
-                title={`Delete the project “${p.title}”?`}
-                confirmLabel="Delete project"
-                action={deleteProject.bind(null, p.id)}
-              >
-                <p>
-                  This permanently removes all datasets, uploaded files,
-                  profiles, descriptions, query logs and AI call logs in this
-                  project.
-                </p>
-                <p className="mt-2 font-medium">This cannot be undone.</p>
-              </ConfirmDialog>
-            </li>
-          ))}
-        </ul>
+              </h2>
+              <p className="text-muted mt-1 line-clamp-2 text-sm">
+                {p.topic || "No research topic yet."}
+              </p>
+            </div>
+            <div className="text-subtle flex items-center justify-between text-xs">
+              <span>
+                Created{" "}
+                {new Date(p.created_at).toLocaleDateString(undefined, {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+              <ArrowRight
+                className="group-hover:text-brand h-4 w-4 transition group-hover:translate-x-0.5"
+                aria-hidden
+              />
+            </div>
+          </article>
+        ))}
+      </div>
+
+      {projects.length === 0 && (
+        <p className="text-muted text-sm">
+          No projects yet. Create one to upload your first dataset.
+        </p>
       )}
     </main>
   );

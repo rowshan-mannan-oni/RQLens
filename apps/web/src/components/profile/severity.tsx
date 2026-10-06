@@ -20,8 +20,7 @@ export const SEVERITY_STYLE: Record<
   info: {
     icon: "ℹ",
     label: "Info",
-    className:
-      "bg-zinc-50 text-zinc-800 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700",
+    className: "bg-surface-2 text-muted border-line",
   },
 };
 

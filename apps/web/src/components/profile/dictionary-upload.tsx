@@ -43,11 +43,11 @@ export function DictionaryUpload({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+    <div className="card flex flex-col gap-2 p-3">
       <label htmlFor="dictionary" className="text-sm font-medium">
         Data dictionary (optional)
       </label>
-      <p className="text-xs text-zinc-500">
+      <p className="text-subtle text-xs">
         A CSV with a column-name column (such as &quot;variable&quot;) and a
         description column (such as &quot;label&quot;). Its descriptions replace
         AI suggestions but not ones you wrote.
@@ -62,9 +62,9 @@ export function DictionaryUpload({
           e.target.value = "";
           if (file) void upload(file);
         }}
-        className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-200 file:px-3 file:py-1 file:text-sm hover:file:bg-zinc-300 dark:file:bg-zinc-800 dark:file:text-zinc-100"
+        className="text-muted file:border-line-strong file:bg-surface file:text-fg hover:file:bg-surface-2 text-sm file:mr-3 file:rounded-md file:border file:px-2.5 file:py-1 file:text-xs file:font-medium"
       />
-      {busy && <p className="text-xs text-zinc-500">Uploading…</p>}
+      {busy && <p className="text-subtle text-xs">Uploading…</p>}
       {result && (
         <p className="text-sm">
           Matched {result.matched} column{result.matched === 1 ? "" : "s"}.

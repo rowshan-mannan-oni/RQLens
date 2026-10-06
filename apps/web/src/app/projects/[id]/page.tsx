@@ -1,191 +1,289 @@
+import {
+  ArrowRight,
+  ChartNoAxesColumn,
+  Database,
+  Lightbulb,
+  Link2,
+  MessagesSquare,
+  Rows3,
+  ShieldCheck,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
 
-import { auth } from "@/auth";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DatasetList } from "@/components/dataset-list";
 import { UploadForm } from "@/components/upload-form";
-import { ApiError, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { formatInt, formatPct } from "@/lib/format";
 import { deleteProject, setShareSamples } from "./actions";
-import type { Dataset, Project, Relationship } from "@/lib/types";
+import type {
+  Dataset,
+  Insights,
+  Project,
+  Relationship,
+  ResearchQuestions,
+} from "@/lib/types";
 
 export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
-  const session = await auth();
-  if (!session?.user) redirect("/");
   const { id } = await props.params;
-
-  let project: Project;
-  let datasets: Dataset[];
-  let joins: Relationship[];
-  try {
-    [project, datasets, joins] = await Promise.all([
-      apiFetch<Project>(`/projects/${id}`),
-      apiFetch<Dataset[]>(`/projects/${id}/datasets`),
-      apiFetch<Relationship[]>(`/projects/${id}/relationships`),
-    ]);
-  } catch (e) {
-    if (e instanceof ApiError && (e.status === 404 || e.status === 422))
-      notFound();
-    throw e;
-  }
+  // The layout already checked that the project exists and belongs to the user.
+  const [project, datasets, joins, rqs, insights] = await Promise.all([
+    apiFetch<Project>(`/projects/${id}`),
+    apiFetch<Dataset[]>(`/projects/${id}/datasets`),
+    apiFetch<Relationship[]>(`/projects/${id}/relationships`),
+    apiFetch<ResearchQuestions>(`/projects/${id}/rqs`),
+    apiFetch<Insights>(`/projects/${id}/insights`),
+  ]);
   const working = datasets.some(
     (d) => d.status !== "ready" && d.status !== "failed",
   );
+  const ready = datasets.filter((d) => d.status === "ready");
+  const rows = ready.reduce((n, d) => n + (d.row_count ?? 0), 0);
+  const columns = ready.reduce((n, d) => n + (d.column_count ?? 0), 0);
+  const verdicts = { answerable: 0, partial: 0, not_answerable: 0 };
+  for (const q of rqs.questions)
+    if (q.assessment && q.status === "done") verdicts[q.assessment.verdict]++;
+  const findings = insights.insights.filter(
+    (i) => i.status === "finding",
+  ).length;
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10">
+    <div className="flex flex-col gap-8">
       <AutoRefresh active={working} />
-      <div>
-        <Link
-          href="/projects"
-          className="text-sm text-zinc-500 hover:underline"
-        >
-          ← Projects
-        </Link>
-        <div className="mt-2 flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {project.title}
-          </h1>
-          <ConfirmDialog
-            triggerLabel="Delete project"
-            title={`Delete the project “${project.title}”?`}
-            confirmLabel="Delete project"
-            action={deleteProject.bind(null, project.id)}
-          >
-            <p>
-              This permanently removes all {datasets.length} dataset
-              {datasets.length === 1 ? "" : "s"}, uploaded files, profiles,
-              descriptions, query logs and AI call logs in this project.
-            </p>
-            <p className="mt-2 font-medium">This cannot be undone.</p>
-          </ConfirmDialog>
-        </div>
-        {project.topic && (
-          <p className="mt-1 text-zinc-600 dark:text-zinc-400">
-            {project.topic}
-          </p>
-        )}
-      </div>
 
-      <form
-        action={setShareSamples.bind(null, project.id, !project.share_samples)}
-        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800"
-      >
-        <p>
-          <span className="font-medium">
-            Sample values {project.share_samples ? "are" : "are not"} shared
-            with the AI.
-          </span>{" "}
-          <span className="text-zinc-600 dark:text-zinc-400">
-            {project.share_samples
-              ? "The AI sees column statistics and a few masked example values, never full rows. Personal-data columns are never shown."
-              : "The AI sees only column names and aggregate statistics."}
-          </span>
-        </p>
-        <button className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
-          {project.share_samples ? "Stop sharing samples" : "Share samples"}
-        </button>
-      </form>
+      <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Tile
+          icon={Database}
+          label="Datasets"
+          value={formatInt(ready.length)}
+          note={
+            datasets.length > ready.length
+              ? `${datasets.length - ready.length} processing or failed`
+              : "ready"
+          }
+        />
+        <Tile
+          icon={Rows3}
+          label="Rows"
+          value={formatInt(rows)}
+          note={`${formatInt(columns)} columns in total`}
+        />
+        <Tile
+          icon={ChartNoAxesColumn}
+          label="Research questions"
+          value={formatInt(rqs.questions.length)}
+          note={
+            rqs.questions.length
+              ? `${verdicts.answerable} answerable · ${verdicts.partial} partly · ${verdicts.not_answerable} not`
+              : "none yet"
+          }
+        />
+        <Tile
+          icon={Lightbulb}
+          label="Findings"
+          value={formatInt(findings)}
+          note={
+            insights.run?.status === "done"
+              ? `from ${insights.run.planned} analyses`
+              : "not generated yet"
+          }
+        />
+      </dl>
 
-      {datasets.some((d) => d.status === "ready") && (
-        <Link
-          href={`/projects/${project.id}/rqs`}
-          className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-        >
-          <span>
-            <span className="font-medium">Research question fit</span>{" "}
-            <span className="text-zinc-600 dark:text-zinc-400">
-              Check whether the data can answer your research questions.
-            </span>
-          </span>
-          <span aria-hidden>→</span>
-        </Link>
-      )}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex min-w-0 flex-col gap-8">
+          <section className="flex flex-col gap-4">
+            <div>
+              <h2 className="section-title">Datasets</h2>
+              <p className="lead">
+                Each CSV becomes a table. Profiles run in the background.
+              </p>
+            </div>
+            <UploadForm projectId={project.id} />
+            {datasets.length > 0 && (
+              <DatasetList projectId={project.id} datasets={datasets} />
+            )}
+          </section>
 
-      {datasets.some((d) => d.status === "ready") && (
-        <Link
-          href={`/projects/${project.id}/insights`}
-          className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-        >
-          <span>
-            <span className="font-medium">Insights</span>{" "}
-            <span className="text-zinc-600 dark:text-zinc-400">
-              Ranked exploratory findings, each with its test and queries.
-            </span>
-          </span>
-          <span aria-hidden>→</span>
-        </Link>
-      )}
-
-      {datasets.some((d) => d.status === "ready") && (
-        <Link
-          href={`/projects/${project.id}/chat`}
-          className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-        >
-          <span>
-            <span className="font-medium">Chat with your data</span>{" "}
-            <span className="text-zinc-600 dark:text-zinc-400">
-              Ask questions; every answer shows the queries behind it.
-            </span>
-          </span>
-          <span aria-hidden>→</span>
-        </Link>
-      )}
-
-      <UploadForm projectId={project.id} />
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-medium">Datasets</h2>
-        {datasets.length === 0 ? (
-          <p className="text-zinc-600 dark:text-zinc-400">
-            No datasets yet. Upload a CSV to profile it.
-          </p>
-        ) : (
-          <DatasetList projectId={project.id} datasets={datasets} />
-        )}
-      </section>
-
-      {joins.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="font-medium">Possible joins between tables</h2>
-            <p className="text-sm text-zinc-500">
-              Column pairs that share values. Coverage is the share of each
-              side&apos;s distinct values found on the other side.
-            </p>
-          </div>
-          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 text-sm dark:divide-zinc-800 dark:border-zinc-800">
-            {joins.map((j) => (
-              <li key={j.id} className="flex flex-col gap-1 p-3">
-                <p>
-                  <code>{j.left.table_name}</code>.
-                  <span className="font-medium">{j.left.column_label}</span>
-                  <span className="text-zinc-500"> ↔ </span>
-                  <code>{j.right.table_name}</code>.
-                  <span className="font-medium">{j.right.column_label}</span>
-                  <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
-                    {j.cardinality}
-                  </span>
-                  {j.name_match && (
-                    <span className="ml-1 text-xs text-zinc-500">
-                      names match
+          {joins.length > 0 && (
+            <section className="flex flex-col gap-4">
+              <div>
+                <h2 className="section-title">Possible joins</h2>
+                <p className="lead">
+                  Column pairs that share values. Coverage is the share of each
+                  side&apos;s distinct values found on the other side.
+                </p>
+              </div>
+              <ul className="card divide-line divide-y">
+                {joins.map((j) => (
+                  <li key={j.id} className="flex gap-3 p-4">
+                    <span className="bg-surface-3 text-muted mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md">
+                      <Link2 className="h-3.5 w-3.5" aria-hidden />
                     </span>
-                  )}
-                </p>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  {formatInt(j.shared_values)} shared values ·{" "}
-                  {formatPct(j.left.coverage, 0)} of {j.left.table_name}.
-                  {j.left.column_label} found in {j.right.table_name} ·{" "}
-                  {formatPct(j.right.coverage, 0)} of {j.right.table_name}.
-                  {j.right.column_label} found in {j.left.table_name}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </main>
+                    <div className="min-w-0 text-sm">
+                      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                        <code className="text-muted">{j.left.table_name}.</code>
+                        <span className="font-medium">
+                          {j.left.column_label}
+                        </span>
+                        <span className="text-subtle">↔</span>
+                        <code className="text-muted">
+                          {j.right.table_name}.
+                        </code>
+                        <span className="font-medium">
+                          {j.right.column_label}
+                        </span>
+                        <span className="badge badge-neutral ml-1">
+                          {j.cardinality}
+                        </span>
+                        {j.name_match && (
+                          <span className="badge badge-brand">names match</span>
+                        )}
+                      </p>
+                      <p className="text-subtle mt-1 text-xs">
+                        {formatInt(j.shared_values)} shared values ·{" "}
+                        {formatPct(j.left.coverage, 0)} of {j.left.column_label}{" "}
+                        found · {formatPct(j.right.coverage, 0)} of{" "}
+                        {j.right.column_label} found
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+
+        <aside className="flex flex-col gap-4">
+          {ready.length > 0 && (
+            <nav aria-label="Next steps" className="card divide-line divide-y">
+              <p className="eyebrow px-4 pt-4 pb-2">Next steps</p>
+              <NextStep
+                href={`/projects/${project.id}/rqs`}
+                icon={ChartNoAxesColumn}
+                title="Check your research questions"
+                text="See which questions the data can answer."
+              />
+              <NextStep
+                href={`/projects/${project.id}/insights`}
+                icon={Lightbulb}
+                title="Generate insights"
+                text="Ranked patterns, each with its test and query."
+              />
+              <NextStep
+                href={`/projects/${project.id}/chat`}
+                icon={MessagesSquare}
+                title="Chat with your data"
+                text="Ask questions; see the SQL behind every answer."
+              />
+            </nav>
+          )}
+
+          <form
+            action={setShareSamples.bind(
+              null,
+              project.id,
+              !project.share_samples,
+            )}
+            className="card flex flex-col gap-3 p-4"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="text-brand h-4 w-4" aria-hidden />
+              <h2 className="text-sm font-semibold">What the AI sees</h2>
+            </div>
+            <p className="text-muted text-sm">
+              {project.share_samples
+                ? "Column statistics and a few masked example values, never full rows. Personal-data columns are never shown."
+                : "Only column names and aggregate statistics. No example values."}
+            </p>
+            <button className="btn btn-secondary btn-sm self-start">
+              {project.share_samples
+                ? "Stop sharing example values"
+                : "Share example values"}
+            </button>
+          </form>
+
+          <div className="card-muted flex flex-col gap-2 p-4">
+            <h2 className="text-sm font-semibold">Delete project</h2>
+            <p className="text-muted text-xs">
+              Removes every dataset, upload, profile, query log and AI call log
+              in this project.
+            </p>
+            <ConfirmDialog
+              triggerLabel="Delete project"
+              triggerClassName="btn btn-sm btn-danger self-start"
+              title={`Delete the project “${project.title}”?`}
+              confirmLabel="Delete project"
+              action={deleteProject.bind(null, project.id)}
+            >
+              <p>
+                This permanently removes all {datasets.length} dataset
+                {datasets.length === 1 ? "" : "s"}, uploaded files, profiles,
+                descriptions, query logs and AI call logs in this project.
+              </p>
+              <p className="mt-2 font-medium">This cannot be undone.</p>
+            </ConfirmDialog>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function Tile({
+  icon: Icon,
+  label,
+  value,
+  note,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  note: string;
+}) {
+  return (
+    <div className="card flex flex-col gap-1 p-4">
+      <dt className="text-muted flex items-center gap-1.5 text-xs font-medium">
+        <Icon className="text-subtle h-3.5 w-3.5" aria-hidden />
+        {label}
+      </dt>
+      <dd className="text-2xl font-semibold tracking-tight tabular-nums">
+        {value}
+      </dd>
+      <dd className="text-subtle truncate text-xs">{note}</dd>
+    </div>
+  );
+}
+
+function NextStep({
+  href,
+  icon: Icon,
+  title,
+  text,
+}: {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  text: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group hover:bg-surface-2 flex items-center gap-3 px-4 py-3 transition-colors last:rounded-b-xl first-of-type:rounded-t-xl"
+    >
+      <span className="bg-brand-soft text-brand-fg grid h-8 w-8 shrink-0 place-items-center rounded-lg">
+        <Icon className="h-4 w-4" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{title}</span>
+        <span className="text-muted block text-xs">{text}</span>
+      </span>
+      <ArrowRight
+        className="text-subtle group-hover:text-brand h-4 w-4 transition group-hover:translate-x-0.5"
+        aria-hidden
+      />
+    </Link>
   );
 }

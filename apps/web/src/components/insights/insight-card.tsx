@@ -1,3 +1,5 @@
+import { ChartColumn } from "lucide-react";
+
 import { AnswerChart } from "@/components/chat/answer-chart";
 import { formatInt } from "@/lib/format";
 import type { Insight, RQQuery } from "@/lib/types";
@@ -5,17 +7,38 @@ import type { Insight, RQQuery } from "@/lib/types";
 const STATUS: Record<string, { label: string; cls: string }> = {
   finding: {
     label: "Exploratory finding",
-    cls: "bg-sky-50 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
+    cls: "badge-brand",
   },
   weak: {
     label: "Significant but negligible",
-    cls: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    cls: "badge-neutral",
   },
   no_evidence: {
     label: "No clear evidence",
-    cls: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    cls: "badge-neutral",
   },
 };
+
+const TEST_LABEL: Record<string, string> = {
+  spearman: "Spearman correlation",
+  mann_whitney: "Mann-Whitney U",
+  kruskal_wallis: "Kruskal-Wallis",
+  chi_square: "Chi-square",
+  trend: "Mann-Kendall trend",
+};
+
+const EFFECT_LABEL: Record<string, string> = {
+  rho: "Spearman's rho",
+  tau: "Kendall's tau",
+  rank_biserial: "Rank-biserial r",
+  cramers_v: "Cramér's V",
+  epsilon_squared: "Epsilon squared",
+};
+
+function pText(p: number | null | undefined): string {
+  if (p == null) return "–";
+  return p < 0.001 ? "< 0.001" : Number(p.toPrecision(2)).toString();
+}
 
 function num(v: number | null | undefined, digits = 3): string {
   if (v == null) return "–";
@@ -27,34 +50,40 @@ export function InsightCard({
   insight,
   rqText,
   rank,
+  chartOpen = true,
 }: {
   insight: Insight;
   rqText: string | null;
   rank: number;
+  chartOpen?: boolean;
 }) {
   const s = STATUS[insight.status ?? ""] ?? STATUS.finding;
   const r = insight.result ?? {};
   return (
-    <article className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <header className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-zinc-500">#{rank}</span>
-          <span className={`rounded-full px-2 py-0.5 font-medium ${s.cls}`}>
-            {s.label}
-          </span>
-          {r.magnitude && insight.status !== "no_evidence" && (
-            <span className="text-zinc-500">{r.magnitude} effect</span>
-          )}
+    <article className="card flex flex-col gap-4 p-5">
+      <header className="flex items-start gap-3">
+        <span className="bg-surface-3 text-muted grid h-8 w-8 shrink-0 place-items-center rounded-lg text-sm font-semibold tabular-nums">
+          {rank}
+        </span>
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className={`badge ${s.cls}`}>{s.label}</span>
+            {r.magnitude && insight.status !== "no_evidence" && (
+              <span className="badge badge-neutral">{r.magnitude} effect</span>
+            )}
+          </div>
+          <h3 className="text-base font-semibold tracking-tight">
+            {insight.title}
+          </h3>
           {rqText && (
-            <span className="truncate text-zinc-500" title={rqText}>
-              · RQ: {rqText}
-            </span>
+            <p className="text-subtle truncate text-xs" title={rqText}>
+              Research question: {rqText}
+            </p>
           )}
         </div>
-        <h3 className="font-medium">{insight.title}</h3>
       </header>
 
-      <p className="text-sm">{insight.statement}</p>
+      <p className="text-sm leading-relaxed">{insight.statement}</p>
       {insight.grounding && !insight.grounding.ok && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
           <span className="font-medium">Check these numbers:</span>{" "}
@@ -63,25 +92,41 @@ export function InsightCard({
         </p>
       )}
 
-      {insight.chart && insight.chart.data.length > 0 && (
-        <AnswerChart chart={insight.chart} />
-      )}
+      {insight.chart &&
+        insight.chart.data.length > 0 &&
+        (chartOpen ? (
+          <AnswerChart chart={insight.chart} />
+        ) : (
+          <details className="group">
+            <summary className="text-muted hover:text-fg flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium select-none">
+              <ChartColumn className="h-3.5 w-3.5" aria-hidden />
+              <span className="group-open:hidden">Show chart</span>
+              <span className="hidden group-open:inline">Hide chart</span>
+            </summary>
+            <div className="mt-3">
+              <AnswerChart chart={insight.chart} />
+            </div>
+          </details>
+        ))}
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
-        <Stat label="Test" value={r.test?.replaceAll("_", " ") ?? "–"} />
+      <dl className="bg-surface-2 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg p-3 text-xs sm:grid-cols-4">
+        <Stat label="Test" value={TEST_LABEL[r.test ?? ""] ?? r.test ?? "–"} />
         <Stat
-          label={r.effect_size_name?.replaceAll("_", " ") ?? "Effect size"}
+          label={EFFECT_LABEL[r.effect_size_name ?? ""] ?? "Effect size"}
           value={num(insight.effect_size)}
+          mono
         />
         <Stat
-          label="p (adjusted)"
-          value={`${num(insight.p_value, 2)} (${num(insight.p_adjusted, 2)})`}
+          label="Adjusted p"
+          value={pText(insight.p_adjusted)}
+          title={`Raw p = ${num(insight.p_value, 2)}; adjusted for multiple testing (Benjamini-Hochberg).`}
+          mono
         />
-        <Stat label="n" value={r.n != null ? formatInt(r.n) : "–"} />
+        <Stat label="n" value={r.n != null ? formatInt(r.n) : "–"} mono />
       </dl>
 
       {insight.caveats.length > 0 && (
-        <ul className="ml-5 list-disc text-xs text-zinc-600 dark:text-zinc-400">
+        <ul className="text-muted ml-5 list-disc text-xs">
           {insight.caveats.map((c, i) => (
             <li key={i}>{c}</li>
           ))}
@@ -90,7 +135,7 @@ export function InsightCard({
 
       {(r.confounders?.length ?? 0) > 0 && (
         <details className="text-xs">
-          <summary className="cursor-pointer text-zinc-600 dark:text-zinc-400">
+          <summary className="text-muted cursor-pointer">
             Confounder check
           </summary>
           <ul className="mt-1 ml-5 list-disc">
@@ -112,11 +157,25 @@ export function InsightCard({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  mono,
+  title,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  title?: string;
+}) {
   return (
-    <div>
-      <dt className="text-zinc-500">{label}</dt>
-      <dd className="font-mono">{value}</dd>
+    <div title={title}>
+      <dt className="text-subtle">{label}</dt>
+      <dd
+        className={`text-fg mt-0.5 text-sm font-medium ${mono ? "tabular-nums" : ""}`}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -124,21 +183,19 @@ function Stat({ label, value }: { label: string; value: string }) {
 export function Queries({ queries }: { queries: RQQuery[] }) {
   return (
     <details className="text-xs">
-      <summary className="cursor-pointer text-zinc-600 dark:text-zinc-400">
+      <summary className="text-muted cursor-pointer">
         How this was computed · {queries.length} quer
         {queries.length === 1 ? "y" : "ies"}
       </summary>
       <ol className="mt-1 flex flex-col gap-2">
         {queries.map((q) => (
           <li key={q.id}>
-            <p className="text-zinc-500">
+            <p className="text-subtle">
               Query #{q.id}
               {q.duration_ms != null && <> · {q.duration_ms} ms</>}
               {q.row_count != null && <> · {formatInt(q.row_count)} rows</>}
             </p>
-            <pre className="mt-1 overflow-x-auto rounded bg-zinc-50 p-2 whitespace-pre-wrap dark:bg-zinc-900">
-              {q.sql}
-            </pre>
+            <pre className="code-block mt-1">{q.sql}</pre>
           </li>
         ))}
       </ol>

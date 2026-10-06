@@ -35,7 +35,7 @@ export function AssistantMessage({ message }: { message: ChatMessage }) {
         </p>
       )}
       {stopped && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted text-sm">
           Stopped early after {STOPPED[stopped] ?? stopped}.
         </p>
       )}
@@ -57,7 +57,7 @@ function Badge({
   const cls =
     tone === "error"
       ? "bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300"
-      : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+      : "bg-surface-3 text-muted";
   return (
     <span
       className={`w-fit rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}
@@ -72,13 +72,13 @@ function HowComputed({ message }: { message: ChatMessage }) {
   const queries = new Map(message.queries.map((q) => [q.id, q]));
   const shown = new Set<number>();
   return (
-    <details className="group rounded-lg border border-zinc-200 text-sm dark:border-zinc-800">
-      <summary className="cursor-pointer list-none px-3 py-2 font-medium select-none hover:bg-zinc-50 dark:hover:bg-zinc-900">
+    <details className="group card text-sm">
+      <summary className="hover:bg-surface-2 cursor-pointer list-none px-3 py-2 font-medium select-none">
         <span className="inline-block transition-transform group-open:rotate-90">
           ▸
         </span>{" "}
         How this was computed
-        <span className="ml-2 font-normal text-zinc-500">
+        <span className="text-subtle ml-2 font-normal">
           {message.queries.length} quer
           {message.queries.length === 1 ? "y" : "ies"}
           {grounding && grounding.checked > 0 && grounding.ok && (
@@ -86,7 +86,7 @@ function HowComputed({ message }: { message: ChatMessage }) {
           )}
         </span>
       </summary>
-      <ol className="flex flex-col gap-3 border-t border-zinc-200 p-3 dark:border-zinc-800">
+      <ol className="border-line flex flex-col gap-3 border-t p-3">
         {message.steps.map((s, i) => {
           const q = s.query_id != null ? queries.get(s.query_id) : undefined;
           if (q) shown.add(q.id);
@@ -106,7 +106,7 @@ function HowComputed({ message }: { message: ChatMessage }) {
           ))}
       </ol>
       {usage && (
-        <p className="border-t border-zinc-200 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+        <p className="border-line text-subtle border-t px-3 py-2 text-xs">
           {usage.llm_calls} AI calls · {usage.tool_calls} tool calls ·{" "}
           {formatInt(usage.tokens)} tokens ·{" "}
           {(usage.duration_ms / 1000).toFixed(1)} s
@@ -126,7 +126,7 @@ export function StepLine({ step, index }: { step: AgentStep; index?: number }) {
   return (
     <div>
       <p className={step.error ? "text-red-700 dark:text-red-400" : undefined}>
-        {index != null && <span className="text-zinc-500">{index}. </span>}
+        {index != null && <span className="text-subtle">{index}. </span>}
         {step.summary}
         {step.error && <span className="text-xs"> — {step.error}</span>}
       </p>
@@ -140,7 +140,7 @@ function StatResult({ result }: { result: Record<string, unknown> }) {
     typeof v === "number" ? v.toPrecision(4).replace(/\.?0+$/, "") : String(v);
   const groups = (result.groups as Record<string, unknown>[] | undefined) ?? [];
   return (
-    <div className="mt-1 rounded-md bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-900">
+    <div className="bg-surface-2 mt-1 rounded-md px-3 py-2 text-xs">
       <p>
         <span className="font-medium">{String(result.test)}</span> ·{" "}
         {String(result.statistic_name)} = {fmt(result.statistic)} · p ={" "}
@@ -148,7 +148,7 @@ function StatResult({ result }: { result: Record<string, unknown> }) {
         {fmt(result.effect_size)} · n = {formatInt(result.n as number)}
       </p>
       {groups.length > 0 && (
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-muted">
           {groups
             .map(
               (g) =>
@@ -157,11 +157,7 @@ function StatResult({ result }: { result: Record<string, unknown> }) {
             .join(" · ")}
         </p>
       )}
-      {result.note ? (
-        <p className="text-zinc-600 dark:text-zinc-400">
-          {String(result.note)}
-        </p>
-      ) : null}
+      {result.note ? <p className="text-muted">{String(result.note)}</p> : null}
     </div>
   );
 }
@@ -169,8 +165,8 @@ function StatResult({ result }: { result: Record<string, unknown> }) {
 function QueryBlock({ query }: { query: ChatQuery }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <pre className="overflow-x-auto rounded-md bg-zinc-50 p-2 text-xs whitespace-pre-wrap dark:bg-zinc-900">
-        <span className="text-zinc-500">-- query {query.id}</span>
+      <pre className="code-block">
+        <span className="text-subtle">-- query {query.id}</span>
         {"\n"}
         {query.sql}
       </pre>
@@ -179,14 +175,14 @@ function QueryBlock({ query }: { query: ChatQuery }) {
       ) : (
         <>
           {query.columns.length > 0 && (
-            <div className="max-h-72 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+            <div className="border-line max-h-72 overflow-auto rounded-md border">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-white dark:bg-zinc-950">
+                <thead className="bg-surface sticky top-0">
                   <tr>
                     {query.columns.map((c) => (
                       <th
                         key={c}
-                        className="border-b border-zinc-200 px-2 py-1 text-left font-medium dark:border-zinc-800"
+                        className="border-line border-b px-2 py-1 text-left font-medium"
                       >
                         {c}
                       </th>
@@ -195,7 +191,7 @@ function QueryBlock({ query }: { query: ChatQuery }) {
                 </thead>
                 <tbody>
                   {query.rows.map((r, i) => (
-                    <tr key={i} className="odd:bg-zinc-50 dark:odd:bg-zinc-900">
+                    <tr key={i} className="odd:bg-surface-2">
                       {r.map((v, j) => (
                         <td key={j} className="px-2 py-1 tabular-nums">
                           {v == null ? "–" : String(v)}
@@ -207,7 +203,7 @@ function QueryBlock({ query }: { query: ChatQuery }) {
               </table>
             </div>
           )}
-          <p className="text-xs text-zinc-500">
+          <p className="text-subtle text-xs">
             {query.row_count != null && (
               <>
                 {query.rows.length < query.row_count

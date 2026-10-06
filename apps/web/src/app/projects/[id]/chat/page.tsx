@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { MessagesSquare, Plus } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -29,23 +29,23 @@ export default async function ChatIndexPage(
   if (chats.length > 0) redirect(`/projects/${id}/chat/${chats[0].id}`);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-10">
-      <Link
-        href={`/projects/${project.id}`}
-        className="text-sm text-zinc-500 hover:underline"
-      >
-        ← {project.title}
-      </Link>
-      <h1 className="text-2xl font-semibold tracking-tight">Chat</h1>
-      <p className="text-zinc-600 dark:text-zinc-400">
+    <div className="card mx-auto flex max-w-xl flex-col items-center gap-3 px-6 py-12 text-center">
+      <span className="bg-brand-soft text-brand-fg grid h-12 w-12 place-items-center rounded-2xl">
+        <MessagesSquare className="h-6 w-6" aria-hidden />
+      </span>
+      <h2 className="text-xl font-semibold tracking-tight">
+        Chat with your data
+      </h2>
+      <p className="lead max-w-md">
         Ask questions about the datasets in this project. The assistant answers
         by running read-only queries and statistical tests, and shows each one.
       </p>
-      <form action={createChat.bind(null, project.id)}>
-        <button className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900">
+      <form action={createChat.bind(null, project.id)} className="mt-2">
+        <button className="btn btn-primary">
+          <Plus className="h-4 w-4" aria-hidden />
           Start a chat
         </button>
       </form>
-    </main>
+    </div>
   );
 }

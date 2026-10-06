@@ -1,5 +1,6 @@
 "use client";
 
+import { LoaderCircle, SendHorizontal, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -8,6 +9,13 @@ import {
   StepLine,
 } from "@/components/chat/assistant-message";
 import type { AgentStep, ChatEvent, ChatMessage } from "@/lib/types";
+
+const EXAMPLES = [
+  "How many rows have a missing outcome?",
+  "Does the average differ between groups?",
+  "Show the number of records per month.",
+  "Which columns are most strongly related?",
+];
 
 type Pending = {
   question: string;
@@ -107,16 +115,28 @@ export function ChatView({
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-col gap-6">
         {messages.length === 0 && !pending && (
-          <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:text-zinc-400">
-            <p className="font-medium text-zinc-900 dark:text-zinc-100">
-              Ask a question about your data.
-            </p>
-            <p className="mt-1">
-              For example: “How many rows have a missing outcome?”, “Does the
-              average score differ between groups?” or “Show the number of
-              records per month.” Every number in the answer comes from a query
-              you can inspect.
-            </p>
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <span className="bg-brand-soft text-brand-fg grid h-11 w-11 place-items-center rounded-2xl">
+              <Sparkles className="h-5 w-5" aria-hidden />
+            </span>
+            <div>
+              <p className="font-medium">Ask a question about your data</p>
+              <p className="text-muted mt-1 text-sm">
+                Every number in the answer comes from a query you can inspect.
+              </p>
+            </div>
+            <div className="flex max-w-xl flex-wrap justify-center gap-2">
+              {EXAMPLES.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setDraft(q)}
+                  className="border-line bg-surface-2 text-muted hover:border-brand/50 hover:text-fg rounded-full border px-3 py-1.5 text-xs transition"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m) =>
@@ -130,14 +150,17 @@ export function ChatView({
           <>
             {!pending.accepted && <UserBubble text={pending.question} muted />}
             <div
-              className="flex flex-col gap-1.5 text-sm text-zinc-600 dark:text-zinc-400"
+              className="text-muted flex flex-col gap-1.5 text-sm"
               aria-live="polite"
             >
               {pending.steps.map((s, i) => (
                 <StepLine key={i} step={s} index={i + 1} />
               ))}
               <p className="flex items-center gap-2">
-                <span className="inline-block size-2 animate-pulse rounded-full bg-[var(--chart-1)]" />
+                <LoaderCircle
+                  className="text-brand h-3.5 w-3.5 animate-spin"
+                  aria-hidden
+                />
                 {pending.status}…
               </p>
             </div>
@@ -147,39 +170,46 @@ export function ChatView({
       </div>
 
       {error && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           {error}
         </p>
       )}
 
       <form
-        className="sticky bottom-0 flex items-end gap-2 bg-[var(--background)] py-3"
+        className="border-line bg-surface/95 sticky bottom-0 -mx-5 -mb-5 border-t px-5 py-4 backdrop-blur"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          rows={2}
-          maxLength={4000}
-          placeholder="Ask about your data…"
-          aria-label="Question"
-          className="min-h-[2.75rem] flex-1 resize-y rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
-        />
-        <button
-          disabled={!!pending || !draft.trim()}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
-        >
-          {pending ? "Working…" : "Ask"}
-        </button>
+        <div className="border-line-strong bg-surface focus-within:border-brand flex items-end gap-2 rounded-xl border p-2 shadow-xs transition focus-within:ring-4 focus-within:ring-(--ring)">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            rows={2}
+            maxLength={4000}
+            placeholder="Ask about your data… (Enter to send, Shift+Enter for a new line)"
+            aria-label="Question"
+            className="placeholder:text-subtle max-h-48 min-h-[2.75rem] flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
+          />
+          <button
+            disabled={!!pending || !draft.trim()}
+            className="btn btn-primary h-9 w-9 shrink-0 rounded-lg p-0"
+            aria-label={pending ? "Working" : "Ask"}
+          >
+            {pending ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <SendHorizontal className="h-4 w-4" aria-hidden />
+            )}
+          </button>
+        </div>
       </form>
     </div>
   );
@@ -188,7 +218,7 @@ export function ChatView({
 function UserBubble({ text, muted }: { text: string; muted?: boolean }) {
   return (
     <p
-      className={`ml-auto max-w-[85%] rounded-lg bg-zinc-100 px-3 py-2 text-sm whitespace-pre-wrap dark:bg-zinc-800 ${muted ? "opacity-70" : ""}`}
+      className={`bg-brand ml-auto max-w-[85%] rounded-2xl rounded-br-md px-4 py-2.5 text-sm whitespace-pre-wrap text-white shadow-sm dark:text-[#0b0c0f] ${muted ? "opacity-70" : ""}`}
     >
       {text}
     </p>

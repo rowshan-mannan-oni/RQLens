@@ -20,7 +20,7 @@ export function AddQuestionForm({
   );
   return (
     <form ref={form} action={formAction} className="flex flex-col gap-2">
-      <label htmlFor="rq-text" className="text-sm font-medium">
+      <label htmlFor="rq-text" className="section-title">
         Add a research question
       </label>
       <textarea
@@ -30,13 +30,10 @@ export function AddQuestionForm({
         maxLength={1000}
         required
         placeholder="e.g. Do union members earn higher hourly wages than non-members?"
-        className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        className="input resize-none"
       />
       <div className="flex items-center gap-3">
-        <button
-          disabled={pending}
-          className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-        >
+        <button disabled={pending} className="btn btn-primary">
           {pending ? "Adding…" : "Add and assess"}
         </button>
         {state.error && (

@@ -19,7 +19,7 @@ export function DescriptionLabel({
   compact?: boolean;
 }) {
   if (!column.description) {
-    return <span className="text-zinc-400">–</span>;
+    return <span className="text-subtle">–</span>;
   }
   const guess =
     column.description_source === "llm" &&
@@ -29,7 +29,7 @@ export function DescriptionLabel({
       <span className={compact ? "line-clamp-2" : undefined}>
         {column.description}
       </span>
-      <span className="text-xs text-zinc-500">
+      <span className="text-subtle text-xs">
         {SOURCE_LABEL[column.description_source ?? ""] ?? ""}
         {column.description_source === "llm" &&
           column.description_confidence &&
@@ -47,7 +47,7 @@ function SubmitButtons({ hasDescription }: { hasDescription: boolean }) {
         name="intent"
         value="save"
         disabled={pending}
-        className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        className="btn btn-primary btn-sm"
       >
         {pending ? "Saving…" : "Save description"}
       </button>
@@ -56,7 +56,7 @@ function SubmitButtons({ hasDescription }: { hasDescription: boolean }) {
           name="intent"
           value="clear"
           disabled={pending}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          className="btn btn-secondary btn-sm"
         >
           Clear
         </button>
@@ -81,7 +81,7 @@ export function DescriptionEditor({
     >
       <label
         htmlFor={`desc-${column.id}`}
-        className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+        className="text-muted text-xs font-medium"
       >
         Description{" "}
         <span className="font-normal">
@@ -99,7 +99,7 @@ export function DescriptionEditor({
         maxLength={2000}
         defaultValue={column.description ?? ""}
         placeholder="What does this column record? Include units or coding."
-        className="w-full rounded-md border border-zinc-300 bg-transparent px-3 py-2 text-sm dark:border-zinc-700"
+        className="border-line-strong w-full rounded-md border bg-transparent px-3 py-2 text-sm"
       />
       <SubmitButtons hasDescription={Boolean(column.description)} />
     </form>

@@ -1,8 +1,27 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Neutrals are slightly cool; one indigo accent marks primary actions and the
+ * current place. Semantic colours (success, warning, danger) are used only for status.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eff1f5;
+  --line: #e4e7ec;
+  --line-strong: #d0d5dd;
+  --fg: #111318;
+  --fg-muted: #555b67;
+  --fg-subtle: #858b98;
+  --brand: #4f46e5;
+  --brand-hover: #4338ca;
+  --brand-soft: #eef0fe;
+  --brand-fg: #3730a3;
+  --ring: rgb(79 70 229 / 0.22);
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.04);
+  --shadow-pop: 0 12px 32px -8px rgb(16 24 40 / 0.18);
+
   /* Charts: categorical slots 1-4 in fixed order, recessive grid and axes (dataviz reference palette). */
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
@@ -13,29 +32,145 @@
   --chart-surface: #ffffff;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0b0c0f;
+    --surface: #131519;
+    --surface-2: #181b20;
+    --surface-3: #1f2329;
+    --line: #262a32;
+    --line-strong: #343944;
+    --fg: #e9ebef;
+    --fg-muted: #a4aab6;
+    --fg-subtle: #747a87;
+    --brand: #818cf8;
+    --brand-hover: #a5b4fc;
+    --brand-soft: #1d1f3d;
+    --brand-fg: #c7d2fe;
+    --ring: rgb(129 140 248 / 0.3);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-pop: 0 16px 40px -8px rgb(0 0 0 / 0.6);
+
     --chart-1: #3987e5;
     --chart-2: #d95926;
     --chart-3: #199e70;
     --chart-4: #c98500;
     --chart-grid: #2c2c2a;
     --chart-axis: #c3c2b7;
-    --chart-surface: #0a0a0a;
+    --chart-surface: #131519;
   }
 }
 
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--fg-muted);
+  --color-subtle: var(--fg-subtle);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-fg: var(--brand-fg);
+  --shadow-card: var(--shadow-card);
+  --shadow-pop: var(--shadow-pop);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+::selection {
+  background: var(--brand-soft);
+  color: var(--brand-fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+code {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 0.92em;
+}
+
+@layer components {
+  .card {
+    @apply border-line bg-surface shadow-card rounded-xl border;
+  }
+  .card-muted {
+    @apply border-line bg-surface-2 rounded-xl border;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap transition-colors select-none disabled:pointer-events-none disabled:opacity-50;
+  }
+  .btn-sm {
+    @apply gap-1 rounded-md px-2.5 py-1 text-xs;
+  }
+  .btn-primary {
+    @apply bg-brand hover:bg-brand-hover text-white shadow-sm dark:text-[#0b0c0f];
+  }
+  .btn-secondary {
+    @apply border-line-strong bg-surface text-fg hover:bg-surface-2 border shadow-xs;
+  }
+  .btn-ghost {
+    @apply text-muted hover:bg-surface-3 hover:text-fg;
+  }
+  .btn-danger {
+    @apply border-line bg-surface border text-red-600 hover:border-red-200 hover:bg-red-50 dark:text-red-400 dark:hover:border-red-900 dark:hover:bg-red-950/40;
+  }
+
+  .input {
+    @apply border-line-strong bg-surface text-fg placeholder:text-subtle focus:border-brand w-full rounded-lg border px-3 py-2 text-sm shadow-xs transition outline-none focus:ring-4 focus:ring-(--ring);
+  }
+  .label {
+    @apply text-fg text-sm font-medium;
+  }
+
+  .badge {
+    @apply inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+  }
+  .badge-neutral {
+    @apply bg-surface-3 text-muted;
+  }
+  .badge-brand {
+    @apply bg-brand-soft text-brand-fg;
+  }
+  .badge-success {
+    @apply bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/15 ring-inset dark:bg-emerald-950/50 dark:text-emerald-300 dark:ring-emerald-400/20;
+  }
+  .badge-warning {
+    @apply bg-amber-50 text-amber-800 ring-1 ring-amber-600/20 ring-inset dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-400/20;
+  }
+  .badge-danger {
+    @apply bg-red-50 text-red-700 ring-1 ring-red-600/15 ring-inset dark:bg-red-950/50 dark:text-red-300 dark:ring-red-400/20;
+  }
+
+  .eyebrow {
+    @apply text-subtle text-xs font-semibold tracking-wider uppercase;
+  }
+  .section-title {
+    @apply text-fg text-base font-semibold tracking-tight;
+  }
+  .lead {
+    @apply text-muted text-sm leading-relaxed;
+  }
+  .code-block {
+    @apply border-line bg-surface-2 text-fg overflow-x-auto rounded-lg border p-3 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap;
+  }
+  .link {
+    @apply text-brand-fg dark:text-brand font-medium underline-offset-4 hover:underline;
+  }
 }

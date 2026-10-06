@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
@@ -22,16 +23,16 @@ const ISSUE_LABEL: Record<string, string> = {
 };
 
 function Cell({ cell }: { cell?: ComparisonCell }) {
-  if (!cell) return <span className="text-zinc-400">not in file</span>;
+  if (!cell) return <span className="text-subtle">not in file</span>;
   return (
     <span className="flex flex-col">
       <span>
         {KIND[cell.kind ?? ""] ?? cell.kind}
         {cell.semantic_type && cell.semantic_type !== cell.kind && (
-          <span className="text-zinc-500"> · {cell.semantic_type}</span>
+          <span className="text-subtle"> · {cell.semantic_type}</span>
         )}
       </span>
-      <span className="text-xs text-zinc-500 tabular-nums">
+      <span className="text-subtle text-xs tabular-nums">
         {formatPct(cell.missing_pct, 0)} missing
         {cell.median != null && ` · median ${formatNum(cell.median)}`}
       </span>
@@ -74,20 +75,19 @@ export default async function ComparePage(
     );
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10">
+    <div className="flex flex-col gap-8">
       <div>
         <Link
           href={`/projects/${id}`}
-          className="text-sm text-zinc-500 hover:underline"
+          className="text-subtle hover:text-fg inline-flex items-center gap-1 text-xs"
         >
-          ← Project
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          All datasets
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
+        <h2 className="mt-2 text-xl font-semibold tracking-tight">
           Compare {c.tables.length} dataset{c.tables.length === 1 ? "" : "s"}
-        </h1>
-        <p className="text-sm text-zinc-500">
-          {c.tables.map((t) => t.label).join(" · ")}
-        </p>
+        </h2>
+        <p className="lead mt-1">{c.tables.map((t) => t.label).join(" · ")}</p>
       </div>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -100,11 +100,8 @@ export default async function ComparePage(
           ],
           ["Mismatches", formatInt(c.issues.length)],
         ].map(([label, value]) => (
-          <div
-            key={label}
-            className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-          >
-            <dt className="text-xs text-zinc-500">{label}</dt>
+          <div key={label} className="card p-3">
+            <dt className="text-subtle text-xs">{label}</dt>
             <dd className="mt-1 text-lg font-semibold tabular-nums">{value}</dd>
           </div>
         ))}
@@ -112,7 +109,7 @@ export default async function ComparePage(
 
       {c.issues.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">Differences between files</h2>
+          <h2 className="section-title">Differences between files</h2>
           <ul className="flex flex-col gap-1.5">
             {c.issues.map((i) => (
               <li
@@ -130,9 +127,9 @@ export default async function ComparePage(
 
       {c.tables.length > 1 && (
         <section className="flex flex-col gap-2">
-          <h2 className="font-medium">How the files link</h2>
+          <h2 className="section-title">How the files link</h2>
           {links.length === 0 ? (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-muted text-sm">
               No shared key columns were detected between these files.
             </p>
           ) : (
@@ -143,7 +140,7 @@ export default async function ComparePage(
                   <span className="font-medium">{l.left.column_label}</span> ↔{" "}
                   {l.right.filename} ·{" "}
                   <span className="font-medium">{l.right.column_label}</span>{" "}
-                  <span className="text-zinc-500">
+                  <span className="text-subtle">
                     ({l.cardinality}, {formatInt(l.shared_values)} shared
                     values)
                   </span>
@@ -155,10 +152,10 @@ export default async function ComparePage(
       )}
 
       <section className="flex flex-col gap-2">
-        <h2 className="font-medium">Columns across files</h2>
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <h2 className="section-title">Columns across files</h2>
+        <div className="border-line overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-left text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+            <thead className="border-line bg-surface-2 text-muted border-b text-left text-xs">
               <tr>
                 <th scope="col" className="px-3 py-2 font-medium">
                   Column
@@ -177,7 +174,7 @@ export default async function ComparePage(
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-line divide-y">
               {c.columns.map((col) => (
                 <tr key={col.key}>
                   <th scope="row" className="px-3 py-2 text-left font-medium">
@@ -212,10 +209,10 @@ export default async function ComparePage(
           stackable={c.stackable}
         />
       ) : (
-        <p className="text-sm text-zinc-500">
+        <p className="text-subtle text-sm">
           Select at least two datasets on the project page to combine them.
         </p>
       )}
-    </main>
+    </div>
   );
 }

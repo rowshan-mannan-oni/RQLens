@@ -41,13 +41,10 @@ function TooltipBox({
   rows: { name: string; value: unknown; color: string }[];
 }) {
   return (
-    <div className="rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+    <div className="border-line bg-surface rounded-md border px-2.5 py-1.5 text-xs shadow-sm">
       <p className="font-medium">{title}</p>
       {rows.map((r) => (
-        <p
-          key={r.name}
-          className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400"
-        >
+        <p key={r.name} className="text-muted flex items-center gap-1.5">
           <span
             className="inline-block size-2 rounded-full"
             style={{ background: r.color }}
@@ -186,11 +183,11 @@ export function AnswerChart({ chart }: { chart: ChartSpec }) {
   }
 
   return (
-    <figure className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+    <figure className="card flex flex-col gap-2 p-3">
       <figcaption className="text-sm font-medium">
         {chart.title}
         {chart.truncated && (
-          <span className="ml-2 text-xs font-normal text-zinc-500">
+          <span className="text-subtle ml-2 text-xs font-normal">
             first {data.length} rows of the query
           </span>
         )}
