@@ -11,6 +11,7 @@ from api.config import get_settings
 from api.db.models import Insight, InsightRun, Project, Query, ResearchQuestion, RQAssessment
 from api.db.session import get_sessionmaker
 from api.insights.pipeline import CONFIG_VERSION, Question, generate
+from api.limits import ai_usage, over_limit_message
 from api.llm.client import LLMClient
 from api.routes.query import execute_logged
 from api.rq.schemas import Mapping
@@ -74,7 +75,13 @@ async def generate_insights(ctx: dict[str, Any], run_id: int) -> str:
             except HTTPException as exc:
                 return None, QueryResult(sql, [], [], [], 0, False, 0, str(exc.detail))
 
-    client = LLMClient.from_settings() if get_settings().llm_api_key else None
+    # The LLM only adds ideas and wording here, so over the monthly limit insights still run,
+    # planned by rules and worded by templates.
+    async with get_sessionmaker()() as session:
+        project = await session.get(Project, project_id)
+        over = over_limit_message(await ai_usage(session, project.user_id)) if project else None
+    use_llm = bool(get_settings().llm_api_key) and over is None
+    client = LLMClient.from_settings() if use_llm else None
     try:
         g = await generate(
             project_ctx, execute, questions=questions, associations=associations, client=client

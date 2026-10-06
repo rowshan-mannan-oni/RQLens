@@ -427,11 +427,11 @@ Three benchmarks. Version each dataset file and never edit a version in place.
 
 ### Phase 6: Export, polish, and deployment (week 11)
 
-- [ ] Dataset report export (Markdown and PDF): overview, data dictionary, quality warnings, RQ fit, top insights, and limitations. Useful as a draft for the "dataset" section of a paper.
-- [ ] Per-user limits: project count, file size, and a monthly LLM budget.
-- [ ] Project deletion removes the DuckDB file, traces, and query logs.
-- [ ] A usage page: cost and latency per project.
-- [ ] Empty states, error messages, and a sample project with a public dataset for the demo.
+- [x] Dataset report export (Markdown and PDF): overview, data dictionary, quality warnings, RQ fit, top insights, and limitations. Useful as a draft for the "dataset" section of a paper.
+- [x] Per-user limits: project count, file size, and a monthly LLM budget.
+- [x] Project deletion removes the DuckDB file, traces, and query logs.
+- [x] A usage page: cost and latency per project.
+- [x] Empty states, error messages, and a sample project with a public dataset for the demo.
 - [ ] Deploy, add health checks and error tracking.
 - [ ] README with architecture diagram, results, and limitations. Record a 2-minute demo video.
 

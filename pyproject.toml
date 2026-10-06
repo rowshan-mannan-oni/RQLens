@@ -21,6 +21,8 @@ dependencies = [
     "numpy>=2.0",
     "scipy>=1.14",
     "sqlglot>=26.0",
+    "markdown>=3.7",
+    "weasyprint>=63",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +33,9 @@ dev = [
     "pytest-asyncio>=0.24",
     "pre-commit>=4.0",
 ]
+
+# Error tracking, enabled by SENTRY_DSN (see apps/api/observability.py).
+sentry = ["sentry-sdk>=2.0"]
 
 [build-system]
 requires = ["setuptools>=75"]
@@ -57,7 +62,7 @@ mypy_path = "apps"
 packages = ["api"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "scipy.*"]
+module = ["arq.*", "scipy.*", "weasyprint.*", "markdown.*", "sentry_sdk.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -3,9 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppHeader } from "@/components/shell/app-header";
 
-export default async function ProjectsLayout({
-  children,
-}: LayoutProps<"/projects">) {
+export default async function UsageLayout({ children }: LayoutProps<"/usage">) {
   const session = await auth();
   if (!session?.user?.email) redirect("/");
   return (

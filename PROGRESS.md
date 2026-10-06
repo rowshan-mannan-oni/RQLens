@@ -1,6 +1,6 @@
 # RQ Lens: progress checklist
 
-Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (after merging main's chat agent).
+Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (Phase 6).
 
 Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not started
 
@@ -14,7 +14,7 @@ Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not sta
 | 3. RQ fit analysis | Done; waiting on a first run with a real model and on review of the verdict rules |
 | 4. Insights | Done; the AI-assisted planning and wording not yet run with a working model |
 | 5. Evaluation | Harness and first 31 chat questions in place; benchmarks not run |
-| 6. Export, polish, deployment | Project deletion done early; rest not started |
+| 6. Export, polish, deployment | Done except the hosted deployment and the demo video (both need your accounts) |
 | 7. Literature review (cited extraction) | Planned (added to plan.md); not started |
 
 Extra features added on request (not in the plan): multi-file upload, compare and combine datasets, delete with confirmation.
@@ -153,13 +153,22 @@ The ranking weights and confounder rules are written down in `DECISIONS.md` as a
 
 ## Phase 6: Export, polish, and deployment
 
-- [ ] Dataset report export (Markdown and PDF).
-- [ ] Per-user limits: project count, file size, monthly LLM budget.
+- [x] Dataset report export, Markdown and PDF (`apps/api/report/`, `GET /projects/{id}/report?format=md|pdf`, download card on the Overview page). Sections: overview, data dictionary (personal-data values hidden), quality warnings, RQ fit, top insights and limitations. The PDF is rendered by WeasyPrint on A4 with page numbers.
+- [x] Per-user limits (`apps/api/limits.py`), all set in config (0 means no limit): 20 projects, 50 datasets per project, 500 MB per file, and 2,000 AI calls and $5 per calendar month (UTC), counted from `llm_calls`. Over the AI limit:
+  - chat and new questions answer 429 with the reset date;
+  - background jobs store the message instead of calling the model;
+  - insights fall back to rules and templates.
 - [x] Project deletion removes the DuckDB file, uploads, query logs and LLM traces (done early, with dataset deletion).
-- [ ] Usage page: cost and latency per project.
-- [ ] Empty states, error messages, sample project with a public dataset.
-- [ ] Deploy, health checks (the API already has `/health/live` and `/health/ready`), error tracking.
-- [ ] README with architecture, results and limitations; 2-minute demo video.
+- [x] Usage page (`/usage`, `GET /usage?period=month|all`): monthly meters for calls and spend, then per project the AI calls, failed calls, tokens, cost, average and p95 latency, queries with average time, and calls per pipeline step.
+- [x] Empty states and error messages reviewed across pages. **Sample project**: "Try a sample project" creates *Sample: Palmer penguins* with three ready-mapped questions (answerable, answerable, not answerable). It works without an AI key: questions with a mapping are measured and decided by the rules, and questions waiting for data are assessed once a dataset is ready.
+- [~] Deployment. Built and run end to end:
+  - production stack in `docker-compose.prod.yml`, with a migration job, healthchecks on every service, and only the web app published;
+  - web image `apps/web/Dockerfile` (Next.js standalone output, non-root user);
+  - optional Sentry error tracking (`SENTRY_DSN`, `apps/api/observability.py`, no request bodies or user data sent);
+  - guide in `DEPLOY.md` covering TLS, backups and platforms without Compose.
+
+  The stack was built and run here: all six containers became healthy, and the sample project ran from sign-in to verdicts. **Not done:** deploying to a real host, which needs your server or Railway/Fly.io account, a domain and OAuth callback URLs. Note: Debian's package mirror is blocked in this sandbox, so the test image skipped the PDF libraries; the PDF report itself was tested outside Docker.
+- [~] README with architecture, results and limitations (`README.md`). The 2-minute demo video is yours to record.
 
 ---
 
@@ -192,7 +201,7 @@ Planned in plan.md (Phase 7). This is a new module modelled on tools like Anara:
 
 | Level | Status |
 |---|---|
-| Unit | ✅ 216 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects |
+| Unit | ✅ 232 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects |
 | Integration | ⚠️ The oracle eval test runs the real loader, profiler, agent loop, guard and executor on real datasets. The full API (Postgres, Redis, worker, streaming chat) was checked with a manual script, not an automated test |
 | Security | ⚠️ Malicious SQL tested; prompt injection through column names and cell values, and oversized uploads, not yet tested |
 | End to end (Playwright) | ⚠️ The RQ Fit page was driven with Playwright by hand (load, edit mapping, save, rejected filter); no automated suite yet |

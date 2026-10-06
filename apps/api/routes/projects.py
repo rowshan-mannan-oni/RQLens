@@ -7,10 +7,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from redis.exceptions import LockError
 from sqlalchemy import select
 
+from api import samples
 from api.auth import CurrentUser
-from api.db.models import Dataset, Project
+from api.db.models import Dataset, Project, ResearchQuestion
+from api.limits import enforce_project_limit
 from api.routes.deps import PROCESSING, OwnedProject, Queue, Session, duckdb_lock
-from api.storage import project_dir
+from api.storage import project_dir, upload_path
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -47,10 +49,49 @@ async def list_projects(user: CurrentUser, session: Session) -> list[ProjectOut]
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(body: ProjectCreate, user: CurrentUser, session: Session) -> ProjectOut:
+    await enforce_project_limit(session, user.id)
     project = Project(user_id=user.id, title=body.title.strip(), topic=body.topic)
     session.add(project)
     await session.commit()
     await session.refresh(project)
+    return ProjectOut.model_validate(project)
+
+
+@router.post("/sample", status_code=status.HTTP_201_CREATED)
+async def create_sample_project(user: CurrentUser, session: Session, queue: Queue) -> ProjectOut:
+    """A ready-made project with a public dataset and three research questions."""
+    await enforce_project_limit(session, user.id)
+    project = Project(user_id=user.id, title=samples.TITLE, topic=samples.TOPIC)
+    session.add(project)
+    await session.flush()
+    dataset = Dataset(
+        project_id=project.id,
+        table_name="penguins",
+        original_filename="penguins.csv",
+        size_bytes=samples.SAMPLE_CSV.stat().st_size,
+        status="queued",
+    )
+    session.add(dataset)
+    for i, q in enumerate(samples.QUESTIONS):
+        # Queued without a job: the worker assesses waiting questions once the data is ready.
+        session.add(
+            ResearchQuestion(
+                project_id=project.id,
+                text=q["text"],
+                position=i,
+                parsed_json=q["parsed"],
+                mapping_json=q["mapping"],
+                status="queued",
+                version=0,
+            )
+        )
+    await session.flush()
+    target = upload_path(project.id, dataset.id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(shutil.copyfile, samples.SAMPLE_CSV, target)
+    await session.commit()
+    await session.refresh(project)
+    await queue.enqueue_job("ingest_dataset", dataset.id)
     return ProjectOut.model_validate(project)
 
 

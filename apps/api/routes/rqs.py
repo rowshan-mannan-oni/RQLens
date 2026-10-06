@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 
 from api.agent.context import load_project_context
 from api.db.models import Project, Query, ResearchQuestion, RQAssessment
+from api.limits import WithinAIBudget, ai_usage, over_limit_message
 from api.routes.deps import OwnedProject, Queue, Session
 from api.rq import mapper
 from api.rq.schemas import Mapping
@@ -98,6 +99,16 @@ async def _owned(rq_id: int, project: Project, session: Session) -> ResearchQues
     return rq
 
 
+async def _over_budget(rq: ResearchQuestion, project: Project, session: Session) -> bool:
+    """For buttons on a question card: record the limit message on the card instead of failing
+    the request, so the researcher sees why nothing happened."""
+    over = over_limit_message(await ai_usage(session, project.user_id))
+    if over:
+        rq.status, rq.error = "failed", over
+        await session.commit()
+    return over is not None
+
+
 async def _enqueue(rq: ResearchQuestion, session: Session, queue: Queue) -> None:
     rq.version += 1
     rq.status, rq.error = "queued", None
@@ -172,7 +183,7 @@ async def list_questions(project: OwnedProject, session: Session) -> QuestionsOu
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_question(
-    body: QuestionIn, project: OwnedProject, session: Session, queue: Queue
+    body: QuestionIn, project: OwnedProject, session: Session, queue: Queue, _: WithinAIBudget
 ) -> QuestionOut:
     n = await session.scalar(select(func.count()).where(ResearchQuestion.project_id == project.id))
     if (n or 0) >= MAX_QUESTIONS:
@@ -203,6 +214,8 @@ async def update_question(
     if body.position is not None:
         rq.position = body.position
     if body.text is not None and body.text.strip() != rq.text:
+        if await _over_budget(rq, project, session):
+            return await _out(session, rq)
         rq.text = body.text.strip()
         rq.parsed_json = None
         rq.mapping_json = None
@@ -240,6 +253,8 @@ async def reassess(
     rq_id: int, body: AssessIn, project: OwnedProject, session: Session, queue: Queue
 ) -> QuestionOut:
     rq = await _owned(rq_id, project, session)
+    if (body.remap or rq.parsed_json is None) and await _over_budget(rq, project, session):
+        return await _out(session, rq)
     if body.remap:
         rq.mapping_json = None
     await _enqueue(rq, session, queue)
@@ -255,6 +270,11 @@ async def delete_question(rq_id: int, project: OwnedProject, session: Session) -
 
 @router.post("/suggestions", status_code=status.HTTP_202_ACCEPTED)
 async def request_suggestions(project: OwnedProject, session: Session, queue: Queue) -> None:
+    over = over_limit_message(await ai_usage(session, project.user_id))
+    if over:  # shown on the page as "Suggestions failed: ..."
+        project.rq_suggestions_status, project.rq_suggestions_error = "failed", over
+        await session.commit()
+        return
     project.rq_suggestions_status = "running"
     project.rq_suggestions_error = None
     await session.commit()

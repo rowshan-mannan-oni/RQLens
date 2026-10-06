@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import { Gauge, LogOut } from "lucide-react";
+import Link from "next/link";
 
 import { signOut } from "@/auth";
 
@@ -26,6 +27,10 @@ export function UserMenu({
           <p className="text-muted truncate text-xs">{email}</p>
         </div>
         <div className="border-line my-1 border-t" />
+        <Link href="/usage" className="btn btn-ghost w-full justify-start">
+          <Gauge className="h-4 w-4" aria-hidden />
+          Usage and limits
+        </Link>
         <form
           action={async () => {
             "use server";

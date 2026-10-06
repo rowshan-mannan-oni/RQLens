@@ -14,6 +14,7 @@ from api.config import get_settings
 from api.db.models import Dataset, DatasetColumn, TableProfile
 from api.ingest.names import sanitize_identifier
 from api.ingest.pipeline import drop_table
+from api.limits import WithinAIBudget, enforce_dataset_limit
 from api.routes.deps import PROCESSING, OwnedProject, Queue, Session, duckdb_lock
 from api.semantic.dictionary import DictionaryError, match_entries, parse_dictionary
 from api.storage import project_db_path, upload_path, uploads_dir
@@ -76,6 +77,7 @@ class DatasetProfileOut(BaseModel):
 async def upload_dataset(
     project: OwnedProject, session: Session, queue: Queue, request: Request, file: UploadFile
 ) -> DatasetOut:
+    await enforce_dataset_limit(session, project.id)
     limit = get_settings().max_upload_bytes
     filename = Path(file.filename or "").name
     if not filename.lower().endswith(".csv"):
@@ -208,7 +210,7 @@ async def upload_dictionary(
 
 @router.post("/{dataset_id}/describe", status_code=status.HTTP_202_ACCEPTED)
 async def redescribe(
-    dataset_id: int, project: OwnedProject, session: Session, queue: Queue
+    dataset_id: int, project: OwnedProject, session: Session, queue: Queue, _: WithinAIBudget
 ) -> DatasetOut:
     """Ask the model again for columns without a user or dictionary description."""
     dataset = await _owned_dataset(dataset_id, project.id, session)
