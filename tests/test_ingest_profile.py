@@ -130,6 +130,8 @@ def test_sanitize_identifier() -> None:
     assert sanitize_identifier("2024 score", taken) == "col_2024_score"
     assert sanitize_identifier("___", taken) == "col"
     assert sanitize_identifier('x"; DROP TABLE t; --', taken) == "x_drop_table_t"
+    assert sanitize_identifier("Années d'études", taken) == "annees_d_etudes"
+    assert sanitize_identifier("Âge", taken) == "age"
 
 
 def test_columns_named_like_internal_aliases(tmp_path: Path) -> None:

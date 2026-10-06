@@ -20,6 +20,7 @@ class TraceRecord:
     latency_ms: int
     request_json: Any
     response_json: Any
+    error: str | None = None
 
 
 Tracer = Callable[[TraceRecord], Awaitable[None]]

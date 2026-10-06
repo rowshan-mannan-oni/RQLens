@@ -27,6 +27,13 @@ class StructuredOutputError(Exception):
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    arguments: str  # raw JSON text as returned by the model; may be invalid
+
+
+@dataclass(frozen=True)
 class LLMResult[T: BaseModel]:
     text: str
     parsed: T | None
@@ -35,6 +42,21 @@ class LLMResult[T: BaseModel]:
     output_tokens: int
     cost_usd: Decimal
     latency_ms: int
+    tool_calls: tuple[ToolCall, ...] = ()
+
+    def assistant_message(self) -> dict[str, Any]:
+        """The reply as a message to append to the conversation, tool calls included."""
+        message: dict[str, Any] = {"role": "assistant", "content": self.text or None}
+        if self.tool_calls:
+            message["tool_calls"] = [
+                {
+                    "id": c.id,
+                    "type": "function",
+                    "function": {"name": c.name, "arguments": c.arguments},
+                }
+                for c in self.tool_calls
+            ]
+        return message
 
 
 class LLMClient:
@@ -85,8 +107,10 @@ class LLMClient:
         eval_run_id: int | None = None,
         temperature: float = 0.0,
         response_format: dict[str, Any] | None = None,
+        tools: Sequence[dict[str, Any]] | None = None,
+        tool_choice: str | None = None,
     ) -> LLMResult[BaseModel]:
-        """One chat completion, traced."""
+        """One chat completion, traced. Failed calls are traced with the error, then re-raised."""
         model = model or self.model
         request: dict[str, Any] = {
             "model": model,
@@ -95,15 +119,44 @@ class LLMClient:
         }
         if response_format is not None:
             request["response_format"] = response_format
+        if tools:
+            request["tools"] = list(tools)
+            if tool_choice is not None:
+                request["tool_choice"] = tool_choice
 
         started = time.perf_counter()
-        response = cast(ChatCompletion, await self._client.chat.completions.create(**request))
+        try:
+            response = cast(ChatCompletion, await self._client.chat.completions.create(**request))
+        except Exception as exc:
+            await self._tracer(
+                TraceRecord(
+                    step=step,
+                    model=model,
+                    prompt_version=prompt_version,
+                    project_id=project_id,
+                    eval_run_id=eval_run_id,
+                    input_tokens=0,
+                    output_tokens=0,
+                    cost_usd=Decimal(0),
+                    latency_ms=round((time.perf_counter() - started) * 1000),
+                    request_json=request,
+                    response_json=None,
+                    error=f"{type(exc).__name__}: {exc}"[:2000],
+                )
+            )
+            raise
         latency_ms = round((time.perf_counter() - started) * 1000)
 
         input_tokens = response.usage.prompt_tokens if response.usage else 0
         output_tokens = response.usage.completion_tokens if response.usage else 0
         cost = cost_usd(self._prices, model, input_tokens, output_tokens)
-        text = response.choices[0].message.content or "" if response.choices else ""
+        message = response.choices[0].message if response.choices else None
+        text = (message.content or "") if message else ""
+        tool_calls = tuple(
+            ToolCall(id=c.id, name=c.function.name, arguments=c.function.arguments or "{}")
+            for c in (message.tool_calls or [] if message else [])
+            if c.type == "function"
+        )
 
         await self._tracer(
             TraceRecord(
@@ -128,6 +181,7 @@ class LLMClient:
             output_tokens=output_tokens,
             cost_usd=cost,
             latency_ms=latency_ms,
+            tool_calls=tool_calls,
         )
 
     async def complete_structured[T: BaseModel](

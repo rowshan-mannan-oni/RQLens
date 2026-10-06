@@ -1,0 +1,1068 @@
+{
+ "penguins-01": {
+  "columns": [
+   "n"
+  ],
+  "rows": [
+   [
+    344
+   ]
+  ],
+  "row_count": 1
+ },
+ "penguins-02": {
+  "columns": [
+   "avg_body_mass_g"
+  ],
+  "rows": [
+   [
+    5076.016260162602
+   ]
+  ],
+  "row_count": 1
+ },
+ "penguins-03": {
+  "columns": [
+   "species",
+   "island",
+   "n"
+  ],
+  "rows": [
+   [
+    "Adelie",
+    "Biscoe",
+    44
+   ],
+   [
+    "Chinstrap",
+    "Dream",
+    68
+   ],
+   [
+    "Adelie",
+    "Torgersen",
+    52
+   ],
+   [
+    "Adelie",
+    "Dream",
+    56
+   ],
+   [
+    "Gentoo",
+    "Biscoe",
+    124
+   ]
+  ],
+  "row_count": 5
+ },
+ "penguins-04": {
+  "columns": [
+   "pct_missing_sex"
+  ],
+  "rows": [
+   [
+    3.197674418604651
+   ]
+  ],
+  "row_count": 1
+ },
+ "penguins-05": {
+  "columns": [
+   "species",
+   "flipper_length_mm"
+  ],
+  "rows": [
+   [
+    "Adelie",
+    181
+   ],
+   [
+    "Adelie",
+    186
+   ],
+   [
+    "Adelie",
+    195
+   ],
+   [
+    "Adelie",
+    193
+   ],
+   [
+    "Adelie",
+    190
+   ],
+   [
+    "Adelie",
+    181
+   ],
+   [
+    "Adelie",
+    195
+   ],
+   [
+    "Adelie",
+    193
+   ],
+   [
+    "Adelie",
+    190
+   ],
+   [
+    "Adelie",
+    186
+   ],
+   [
+    "Adelie",
+    180
+   ],
+   [
+    "Adelie",
+    182
+   ],
+   [
+    "Adelie",
+    191
+   ],
+   [
+    "Adelie",
+    198
+   ],
+   [
+    "Adelie",
+    185
+   ],
+   [
+    "Adelie",
+    195
+   ],
+   [
+    "Adelie",
+    197
+   ],
+   [
+    "Adelie",
+    184
+   ],
+   [
+    "Adelie",
+    194
+   ],
+   [
+    "Adelie",
+    174
+   ]
+  ],
+  "row_count": 342,
+  "stat": {
+   "test": "kruskal",
+   "n": 342,
+   "rows_dropped_missing": 0,
+   "statistic": {
+    "name": "H",
+    "value": 244.89054204373488
+   },
+   "p_value": 6.648052800340086e-54,
+   "effect_size": {
+    "measure": "epsilon_squared",
+    "value": 0.7181540822396917,
+    "magnitude": "large"
+   },
+   "groups": [
+    {
+     "group": "Adelie",
+     "n": 151,
+     "median": 190.0,
+     "mean": 189.95364238410596
+    },
+    {
+     "group": "Chinstrap",
+     "n": 68,
+     "median": 196.0,
+     "mean": 195.8235294117647
+    },
+    {
+     "group": "Gentoo",
+     "n": 123,
+     "median": 216.0,
+     "mean": 217.1869918699187
+    }
+   ]
+  }
+ },
+ "titanic-01": {
+  "columns": [
+   "pclass",
+   "survival_pct"
+  ],
+  "rows": [
+   [
+    1,
+    62.96296296296296
+   ],
+   [
+    2,
+    47.28260869565217
+   ],
+   [
+    3,
+    24.236252545824847
+   ]
+  ],
+  "row_count": 3
+ },
+ "titanic-02": {
+  "columns": [
+   "median_fare"
+  ],
+  "rows": [
+   [
+    13.0
+   ]
+  ],
+  "row_count": 1
+ },
+ "titanic-03": {
+  "columns": [
+   "survived",
+   "avg_age"
+  ],
+  "rows": [
+   [
+    0,
+    30.62617924528302
+   ],
+   [
+    1,
+    28.343689655172415
+   ]
+  ],
+  "row_count": 2
+ },
+ "titanic-04": {
+  "columns": [
+   "sex",
+   "survived"
+  ],
+  "rows": [
+   [
+    "male",
+    0
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "female",
+    0
+   ],
+   [
+    "female",
+    1
+   ],
+   [
+    "male",
+    0
+   ],
+   [
+    "male",
+    1
+   ],
+   [
+    "female",
+    0
+   ],
+   [
+    "female",
+    1
+   ]
+  ],
+  "row_count": 891,
+  "stat": {
+   "test": "chi_square",
+   "n": 891,
+   "rows_dropped_missing": 0,
+   "statistic": {
+    "name": "chi2",
+    "value": 263.05057407065567,
+    "dof": 1
+   },
+   "p_value": 3.711747770113424e-59,
+   "effect_size": {
+    "measure": "cramers_v",
+    "value": 0.5433513806577551,
+    "magnitude": "large"
+   },
+   "table": {
+    "rows": [
+     "female",
+     "male"
+    ],
+    "columns": [
+     "0",
+     "1"
+    ],
+    "counts": [
+     [
+      81,
+      233
+     ],
+     [
+      468,
+      109
+     ]
+    ]
+   },
+   "notes": []
+  }
+ },
+ "titanic-05": {
+  "columns": [
+   "n_missing_deck"
+  ],
+  "rows": [
+   [
+    688
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-01": {
+  "columns": [
+   "day",
+   "n"
+  ],
+  "rows": [
+   [
+    "Monday",
+    708
+   ],
+   [
+    "Wednesday",
+    966
+   ],
+   [
+    "Tuesday",
+    825
+   ],
+   [
+    "Thursday",
+    905
+   ],
+   [
+    "Saturday",
+    1046
+   ],
+   [
+    "Sunday",
+    868
+   ],
+   [
+    "Friday",
+    1115
+   ]
+  ],
+  "row_count": 7
+ },
+ "taxis-02": {
+  "columns": [
+   "tip_pct"
+  ],
+  "rows": [
+   [
+    20.312928011369287
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-03": {
+  "columns": [
+   "pickup_borough",
+   "n"
+  ],
+  "rows": [
+   [
+    "Manhattan",
+    5268
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-04": {
+  "columns": [
+   "hour",
+   "n"
+  ],
+  "rows": [
+   [
+    18,
+    417
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-05": {
+  "columns": [
+   "distance",
+   "fare"
+  ],
+  "rows": [
+   [
+    1.6,
+    7.0
+   ],
+   [
+    0.79,
+    5.0
+   ],
+   [
+    1.37,
+    7.5
+   ],
+   [
+    7.7,
+    27.0
+   ],
+   [
+    2.16,
+    9.0
+   ],
+   [
+    0.49,
+    7.5
+   ],
+   [
+    3.65,
+    13.0
+   ],
+   [
+    1.4,
+    8.5
+   ],
+   [
+    3.63,
+    15.0
+   ],
+   [
+    1.52,
+    8.0
+   ],
+   [
+    3.9,
+    17.0
+   ],
+   [
+    1.53,
+    6.5
+   ],
+   [
+    1.05,
+    6.5
+   ],
+   [
+    1.75,
+    10.5
+   ],
+   [
+    2.9,
+    11.5
+   ],
+   [
+    2.09,
+    13.5
+   ],
+   [
+    2.12,
+    13.0
+   ],
+   [
+    2.6,
+    10.5
+   ],
+   [
+    2.18,
+    9.5
+   ],
+   [
+    1.08,
+    6.5
+   ]
+  ],
+  "row_count": 6433,
+  "stat": {
+   "test": "spearman",
+   "n": 6433,
+   "rows_dropped_missing": 0,
+   "statistic": {
+    "name": "rho",
+    "value": 0.9257442230436977
+   },
+   "p_value": 0.0,
+   "effect_size": {
+    "measure": "rho",
+    "value": 0.9257442230436977,
+    "magnitude": "large"
+   }
+  }
+ },
+ "flights-01": {
+  "columns": [
+   "year",
+   "total"
+  ],
+  "rows": [
+   [
+    1960,
+    5714
+   ]
+  ],
+  "row_count": 1
+ },
+ "flights-02": {
+  "columns": [
+   "year",
+   "total"
+  ],
+  "rows": [
+   [
+    1949,
+    1520
+   ],
+   [
+    1960,
+    5714
+   ]
+  ],
+  "row_count": 2
+ },
+ "flights-03": {
+  "columns": [
+   "month_start",
+   "passengers"
+  ],
+  "rows": [
+   [
+    "1949-01-01T00:00:00",
+    112
+   ],
+   [
+    "1949-02-01T00:00:00",
+    118
+   ],
+   [
+    "1949-03-01T00:00:00",
+    132
+   ],
+   [
+    "1949-04-01T00:00:00",
+    129
+   ],
+   [
+    "1949-05-01T00:00:00",
+    121
+   ],
+   [
+    "1949-06-01T00:00:00",
+    135
+   ],
+   [
+    "1949-07-01T00:00:00",
+    148
+   ],
+   [
+    "1949-08-01T00:00:00",
+    148
+   ],
+   [
+    "1949-09-01T00:00:00",
+    136
+   ],
+   [
+    "1949-10-01T00:00:00",
+    119
+   ],
+   [
+    "1949-11-01T00:00:00",
+    104
+   ],
+   [
+    "1949-12-01T00:00:00",
+    118
+   ],
+   [
+    "1950-01-01T00:00:00",
+    115
+   ],
+   [
+    "1950-02-01T00:00:00",
+    126
+   ],
+   [
+    "1950-03-01T00:00:00",
+    141
+   ],
+   [
+    "1950-04-01T00:00:00",
+    135
+   ],
+   [
+    "1950-05-01T00:00:00",
+    125
+   ],
+   [
+    "1950-06-01T00:00:00",
+    149
+   ],
+   [
+    "1950-07-01T00:00:00",
+    170
+   ],
+   [
+    "1950-08-01T00:00:00",
+    170
+   ]
+  ],
+  "row_count": 144,
+  "stat": {
+   "test": "trend",
+   "n": 144,
+   "rows_dropped_missing": 0,
+   "statistic": {
+    "name": "kendall_tau",
+    "value": 0.8098232119400294
+   },
+   "p_value": 6.584144856287916e-47,
+   "effect_size": {
+    "measure": "kendall_tau",
+    "value": 0.8098232119400294,
+    "magnitude": "large"
+   },
+   "slope": {
+    "value": 0.0805409014748088,
+    "unit": "per day",
+    "ci95": [
+     0.07538091419406576,
+     0.08616647127784291
+    ]
+   },
+   "notes": [
+    "Mann-Kendall style test (Kendall's tau against time) with Theil-Sen slope."
+   ],
+   "slope_per_year": 29.417564263673913
+  }
+ },
+ "mpg-01": {
+  "columns": [
+   "origin",
+   "avg_mpg"
+  ],
+  "rows": [
+   [
+    "usa",
+    20.083534136546177
+   ],
+   [
+    "europe",
+    27.891428571428573
+   ],
+   [
+    "japan",
+    30.450632911392397
+   ]
+  ],
+  "row_count": 3
+ },
+ "mpg-02": {
+  "columns": [
+   "n_missing"
+  ],
+  "rows": [
+   [
+    6
+   ]
+  ],
+  "row_count": 1
+ },
+ "cps-01": {
+  "columns": [
+   "gender",
+   "median_wage"
+  ],
+  "rows": [
+   [
+    "female",
+    6.8
+   ],
+   [
+    "male",
+    8.93
+   ]
+  ],
+  "row_count": 2
+ },
+ "cps-02": {
+  "columns": [
+   "union_pct"
+  ],
+  "rows": [
+   [
+    17.97752808988764
+   ]
+  ],
+  "row_count": 1
+ },
+ "cps-03": {
+  "columns": [
+   "union",
+   "wage"
+  ],
+  "rows": [
+   [
+    false,
+    5.1
+   ],
+   [
+    false,
+    4.95
+   ],
+   [
+    false,
+    6.67
+   ],
+   [
+    false,
+    4.0
+   ],
+   [
+    false,
+    7.5
+   ],
+   [
+    true,
+    13.07
+   ],
+   [
+    false,
+    4.45
+   ],
+   [
+    false,
+    19.47
+   ],
+   [
+    false,
+    13.28
+   ],
+   [
+    false,
+    8.75
+   ],
+   [
+    true,
+    11.35
+   ],
+   [
+    true,
+    11.5
+   ],
+   [
+    false,
+    6.5
+   ],
+   [
+    true,
+    6.25
+   ],
+   [
+    false,
+    19.98
+   ],
+   [
+    false,
+    7.3
+   ],
+   [
+    false,
+    8.0
+   ],
+   [
+    true,
+    22.2
+   ],
+   [
+    false,
+    3.65
+   ],
+   [
+    false,
+    20.55
+   ]
+  ],
+  "row_count": 534,
+  "stat": {
+   "test": "mann_whitney",
+   "n": 534,
+   "rows_dropped_missing": 0,
+   "statistic": {
+    "name": "U",
+    "value": 13779.5
+   },
+   "p_value": 1.2139971912082814e-07,
+   "effect_size": {
+    "measure": "cliffs_delta",
+    "value": -0.3445823820395738,
+    "magnitude": "medium"
+   },
+   "groups": [
+    {
+     "group": "False",
+     "n": 438,
+     "median": 7.07,
+     "mean": 8.635228310502283
+    },
+    {
+     "group": "True",
+     "n": 96,
+     "median": 10.0,
+     "mean": 10.798124999999999
+    }
+   ],
+   "notes": [
+    "A positive delta means values in 'False' tend to be higher than 'True'."
+   ]
+  }
+ },
+ "ames-01": {
+  "columns": [
+   "neighborhood",
+   "avg_price"
+  ],
+  "rows": [
+   [
+    "Northridge",
+    330319.1267605634
+   ],
+   [
+    "Stone_Brook",
+    324229.1960784314
+   ],
+   [
+    "Northridge_Heights",
+    322018.265060241
+   ],
+   [
+    "Green_Hills",
+    280000.0
+   ],
+   [
+    "Veenker",
+    248314.58333333334
+   ]
+  ],
+  "row_count": 5
+ },
+ "ames-02": {
+  "columns": [
+   "n_with_pool"
+  ],
+  "rows": [
+   [
+    13
+   ]
+  ],
+  "row_count": 1
+ },
+ "ant-01": {
+  "columns": [
+   "pct_buggy"
+  ],
+  "rows": [
+   [
+    22.28187919463087
+   ]
+  ],
+  "row_count": 1
+ },
+ "ant-02": {
+  "columns": [
+   "loc",
+   "bug"
+  ],
+  "rows": [
+   [
+    106,
+    0
+   ],
+   [
+    76,
+    0
+   ],
+   [
+    7,
+    0
+   ],
+   [
+    101,
+    0
+   ],
+   [
+    185,
+    1
+   ],
+   [
+    16,
+    0
+   ],
+   [
+    345,
+    1
+   ],
+   [
+    183,
+    0
+   ],
+   [
+    119,
+    0
+   ],
+   [
+    255,
+    0
+   ],
+   [
+    71,
+    0
+   ],
+   [
+    38,
+    0
+   ],
+   [
+    1,
+    0
+   ],
+   [
+    54,
+    0
+   ],
+   [
+    252,
+    0
+   ],
+   [
+    110,
+    0
+   ],
+   [
+    34,
+    0
+   ],
+   [
+    835,
+    0
+   ],
+   [
+    6,
+    0
+   ],
+   [
+    41,
+    1
+   ]
+  ],
+  "row_count": 745,
+  "stat": {
+   "test": "spearman",
+   "n": 745,
+   "rows_dropped_missing": 0,
+   "statistic": {
+    "name": "rho",
+    "value": 0.49194853636994296
+   },
+   "p_value": 1.1663757479490195e-46,
+   "effect_size": {
+    "measure": "rho",
+    "value": 0.49194853636994296,
+    "magnitude": "medium"
+   }
+  }
+ },
+ "messy-01": {
+  "columns": [
+   "avg_experience"
+  ],
+  "rows": [
+   [
+    17.842718446601943
+   ]
+  ],
+  "row_count": 1
+ },
+ "join-01": {
+  "columns": [
+   "n"
+  ],
+  "rows": [
+   [
+    534
+   ]
+  ],
+  "row_count": 1
+ },
+ "ambiguous-01": {
+  "expected": "clarification"
+ },
+ "unanswerable-01": {
+  "expected": "cannot_answer"
+ }
+}

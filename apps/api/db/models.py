@@ -194,6 +194,8 @@ class Message(TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     chart_json: Mapped[Json | None]
+    # Assistant messages: answer kind, steps taken, grounding result, cost and latency.
+    details_json: Mapped[Json | None]
 
 
 class Query(TimestampMixin, Base):
@@ -250,3 +252,4 @@ class LLMCall(TimestampMixin, Base):
     latency_ms: Mapped[int] = mapped_column(default=0)
     request_json: Mapped[Json | None]
     response_json: Mapped[Json | None]
+    error: Mapped[str | None] = mapped_column(Text)  # set when the call raised
