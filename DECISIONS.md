@@ -83,3 +83,29 @@ Notes on the rules:
 
 - A numeric explanatory column with at most 20 distinct values counts as groups only for comparative questions. Otherwise it is treated as a correlation. The profiler already types low-cardinality integers such as `pclass` as categorical.
 - Each check is a separate small query rather than one large query, so each piece of evidence links to exactly the query that produced it.
+
+## Phase 4: insights
+
+- **Planning.** Analyses come from three sources, in this priority order: research-question mappings (outcome against each explanatory variable, with the question's population filter), then the LLM's ideas (optional, at most 8), then the profile's strongest associations. At most 20 analyses run. Without an LLM, insights still work: the plan comes from rules and statements use templates.
+- **Specs are data, not code:** a table, two columns, a test from the fixed library and an optional SQL filter. Each spec is checked against column kinds (for example, Mann-Whitney needs a numeric column and a 2-value group column) and the filter passes the SQL guard.
+- **Columns that are never analysed:** identifiers, constants, free text, personal data, and complete integer columns with a unique value in every row (row numbers in CSV exports). An analysis of a row number only reflects how the file was sorted, as messy_survey's `Respondent #` showed.
+- **Integer columns with 6 or more values** are treated as ordered numbers (Spearman), not as groups, even when the profiler types them categorical (bug counts). Fewer values (`pclass`) are groups.
+- **Profile pairs left out:** category pairs with Cramér's V ≥ 0.9, because one usually recodes the other (`who` and `sex`); any pair at 0.98 or more (near-duplicates). Strong numeric correlations are kept (flights' year and passengers, rho 0.95, is a real trend). Columns at 0.95 or more count as one column when removing duplicate analyses (`pclass` and `class`).
+- **Multiple testing.** Benjamini-Hochberg runs over every test in a run; both raw and adjusted p-values are stored and shown.
+- **Ranking (draft for review):** score = 0.4 × relevance + 0.4 × effect + 0.2 × support, halved when the adjusted p ≥ 0.05.
+  - Relevance: 1 for an analysis of a research question, 0.6 when a column is mapped to some question, 0.5 for the LLM's ideas, 0.3 for profile pairs.
+  - Effect: |effect| on a 0-to-1 scale, using √ε² for Kruskal-Wallis.
+  - Support: log10(n) / 3, capped at 1.
+
+  The p-value never ranks a result on its own: a tiny p with a negligible effect is labelled "significant but negligible".
+- **Status:** finding (adjusted p < 0.05 and at least a small effect), weak (significant but negligible), or no evidence.
+- **Confounder check** for the top 5 findings: grouping columns with 2 to 6 values, associated (≥ 0.1) with both analysed columns, at most 2 per finding. The same test is re-run in each subgroup with 30 or more rows, and at least 2 such subgroups are needed.
+  - **reverses:** opposite sign with |effect| ≥ 0.1 in some subgroup (signed measures only);
+  - **weakens:** the row-weighted mean |effect| within subgroups is under half the overall |effect|;
+  - **holds:** otherwise.
+
+  A planted Simpson's paradox is caught in the tests.
+- **Statements.** A template statement uses only the test's own numbers, so it always passes the grounding check. An LLM rewrite replaces it only if the rewrite passes the check against that insight's result.
+- **Caveats on every card:** the exploratory label, sampling, the population filter, confounder results, placeholder codes such as -999 that were included, and "association, not cause".
+- **Data-quality insights** reuse the Phase 3 rule results (missing outcome, small or one-value groups) for each research question, with the query that measured them.
+- **Known limitation:** a column computed from another (titanic's `alone` from `sibsp` and `parch`, or `who` from age) can't be detected in general, so such pairs can still rank high.

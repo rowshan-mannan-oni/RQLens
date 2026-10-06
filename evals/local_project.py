@@ -21,14 +21,25 @@ def manifest() -> list[dict[str, Any]]:
 
 def build(db_path: Path, names: list[str] | None = None) -> ProjectContext:
     """Load the named datasets (all by default) into db_path and return their context."""
+    return build_with_associations(db_path, names)[0]
+
+
+def build_with_associations(
+    db_path: Path, names: list[str] | None = None
+) -> tuple[ProjectContext, dict[str, list[dict[str, Any]]]]:
+    """Like build, plus each table's pairwise associations from the profile."""
     db_path.unlink(missing_ok=True)
     tables = []
+    associations: dict[str, list[dict[str, Any]]] = {}
     for entry in manifest():
         if names is not None and entry["name"] not in names:
             continue
         report = run_load(db_path, DATASETS / entry["file"], entry["name"])
         profile = run_profile(db_path, report)
         pii = run_pii(db_path, profile, report.table_name)
+        associations[report.table_name] = list(
+            (profile.table.get("relationships") or {}).get("associations") or []
+        )
         tables.append(
             TableInfo(
                 table=report.table_name,
@@ -50,7 +61,8 @@ def build(db_path: Path, names: list[str] | None = None) -> ProjectContext:
                 ],
             )
         )
-    return ProjectContext(project_id=0, topic=None, share_samples=True, tables=tables)
+    ctx = ProjectContext(project_id=0, topic=None, share_samples=True, tables=tables)
+    return ctx, associations
 
 
 def subset(ctx: ProjectContext, names: list[str]) -> ProjectContext:

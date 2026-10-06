@@ -29,12 +29,13 @@ from typing import Any
 
 from api.agent.loop import PROMPT_VERSION, Limits, Outcome, run_agent
 from api.agent.tools import ProjectContext, ToolBox
+from api.config import get_settings
 from api.llm.client import LLMClient
 from api.llm.tracing import null_tracer
 from api.semantic.column_retrieval import ColumnRetriever
 from api.sql.executor import ROW_LIMIT, QueryResult, run_query
 from api.stats.library import run_test
-from evals import local_project, rq_eval
+from evals import insights_eval, local_project, rq_eval
 from evals.oracle import OracleClient
 from evals.scoring import results_match, stat_results_match
 
@@ -47,10 +48,22 @@ STAT_ROWS = 100_000
 
 # A spread of categories for the per-pull-request smoke run.
 SMOKE_IDS = [
-    "penguins-01", "penguins-04", "penguins-05", "titanic-01", "titanic-04", "taxis-01",
-    "taxis-02", "flights-01", "mpg-01", "cps-01", "ames-01", "ant-01", "join-01",
-    "ambiguous-01", "unanswerable-01",
-]  # fmt: skip
+    "penguins-01",
+    "penguins-04",
+    "penguins-05",
+    "titanic-01",
+    "titanic-04",
+    "taxis-01",
+    "taxis-02",
+    "flights-01",
+    "mpg-01",
+    "cps-01",
+    "ames-01",
+    "ant-01",
+    "join-01",
+    "ambiguous-01",
+    "unanswerable-01",
+]
 
 
 def load_cases(ids: list[str] | None = None, smoke: bool = False) -> list[dict[str, Any]]:
@@ -206,7 +219,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
-    parser.add_argument("suite", choices=["qa", "rq"])
+    parser.add_argument("suite", choices=["qa", "rq", "insights"])
     parser.add_argument("--check-gold", action="store_true")
     parser.add_argument("--llm", choices=["settings", "oracle"], default="settings")
     parser.add_argument("--model", default=None, help="override LLM_MODEL")
@@ -221,6 +234,8 @@ async def main() -> int:
     args = parser.parse_args()
     if args.suite == "rq":
         return await main_rq(args)
+    if args.suite == "insights":
+        return await main_insights(args)
 
     cases = load_cases(args.ids, args.smoke)
     with tempfile.TemporaryDirectory() as tmp:
@@ -300,6 +315,34 @@ async def main_rq(args: argparse.Namespace) -> int:
     (REPORTS / f"{stem}.md").write_text(summary)
     print("\n" + summary)
     return 0
+
+
+async def main_insights(args: argparse.Namespace) -> int:
+    client = None if args.llm == "oracle" else LLMClient.from_settings(null_tracer)
+    if client is not None and not get_settings().llm_api_key:
+        client = None  # no key: rules-only planning and template statements
+    meta = {
+        "started": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
+        "llm": "none" if client is None else client.model,
+        "git_sha": git_sha(),
+    }
+    names = args.ids or [e["name"] for e in local_project.manifest()]
+    results = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for name in names:
+            r = await insights_eval.run_dataset(name, Path(tmp), client)
+            results.append(r)
+            print(
+                f"{name:14} {r['insights']:>2} insights, {r['findings']:>2} findings, "
+                f"{len(r['ungrounded'])} ungrounded, {len(r['failed'])} failed"
+            )
+    REPORTS.mkdir(exist_ok=True)
+    stem = f"insights-{datetime.now(UTC):%Y%m%d-%H%M%S}"
+    (REPORTS / f"{stem}.json").write_text(insights_eval.report_json(results, meta))
+    summary = insights_eval.summarise(results, meta)
+    (REPORTS / f"{stem}.md").write_text(summary)
+    print("\n" + summary)
+    return 0 if all(not r["ungrounded"] for r in results) else 1
 
 
 if __name__ == "__main__":

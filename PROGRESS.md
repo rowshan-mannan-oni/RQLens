@@ -12,7 +12,7 @@ Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not sta
 | 1. Ingestion and profiling | Done; all development datasets load and profile |
 | 2. Semantic layer and chat | Built and tested; waiting on a first run with a real model against the 31 questions |
 | 3. RQ fit analysis | Done; waiting on a first run with a real model and on review of the verdict rules |
-| 4. Insights | Not started |
+| 4. Insights | Done; the AI-assisted planning and wording not yet run with a working model |
 | 5. Evaluation | Harness and first 31 chat questions in place; benchmarks not run |
 | 6. Export, polish, deployment | Project deletion done early; rest not started |
 
@@ -129,13 +129,17 @@ The verdict rules are written down in `DECISIONS.md`. Plan section 13 asks you t
 
 ## Phase 4: Insights
 
-- [ ] Planner: bounded list of analysis specs (maximum 20).
-- [ ] Runner: SQL plus the fixed statistics library (Spearman, Mann-Whitney U, Kruskal-Wallis, chi-square, trend test, with effect sizes).
-- [ ] Benjamini-Hochberg correction; raw and adjusted p-values stored.
-- [ ] Ranking by RQ relevance, effect size and sample support.
-- [ ] Confounder check for top insights.
-- [ ] LLM-written statements with the grounding check.
-- [ ] Insights page, including data-quality insights that affect an RQ.
+The ranking weights and confounder rules are written down in `DECISIONS.md` as a draft for review.
+
+- [x] Planner: at most 20 analysis specs (table, two columns, a test from the library, an optional filter), drawn in order from research-question mappings, the LLM (optional, `insights_plan.v1`) and the profile's strongest associations. Specs are validated against column kinds. Identifiers, row-number columns, personal data, recoded category pairs and near-duplicates are left out, and duplicates count up to aliases (`pclass` and `class`).
+- [x] Runner: a guarded, logged query plus the fixed statistics library (Spearman, Mann-Whitney U, Kruskal-Wallis, chi-square, trend) with effect sizes, and a second query shaping the chart.
+- [x] Benjamini-Hochberg across all tests in a run; raw and adjusted p-values are stored and shown.
+- [x] Ranking by RQ relevance, effect size and sample support, not by p-value. Statuses: finding, significant but negligible, no clear evidence.
+- [x] Confounder check for the top 5 findings: re-test within subgroups of associated grouping columns and add a caveat when the pattern reverses or weakens. A planted Simpson's paradox is caught in the tests.
+- [x] Statements: a template built from the test's own numbers (always grounded). An optional LLM rewrite (`insights_write.v1`) is kept only if it passes the grounding check. Caveats on every card: exploratory label, sampling, filter, confounders, placeholder codes such as -999, association not cause.
+- [x] Insights page: data-quality issues per RQ (from the Phase 3 checks), then ranked findings with chart, statement, effect size, adjusted p, n, caveats, confounder check and queries, then weak or no-evidence results collapsed. Checked in a browser at desktop and phone widths and in dark mode.
+
+**Done when:** insights are generated for all development datasets and no card contains an untraceable number. ✅ Met without an LLM: `run_eval.py insights` produced 161 insights across all 9 datasets, all charted, none failing to run, and **0 with an untraceable number**. A planted strong effect ranks first while 6 pure-noise pairs come out as "no clear evidence" after correction. ⚠️ The AI-assisted plan and rewording have only run against a scripted model: the real key's free-tier quota was exhausted during this session.
 
 ## Phase 5: Evaluation
 
@@ -169,7 +173,7 @@ The verdict rules are written down in `DECISIONS.md`. Plan section 13 asks you t
 
 | Level | Status |
 |---|---|
-| Unit | ✅ 191 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model) |
+| Unit | ✅ 216 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects |
 | Integration | ⚠️ The oracle eval test runs the real loader, profiler, agent loop, guard and executor on real datasets. The full API (Postgres, Redis, worker, streaming chat) was checked with a manual script, not an automated test |
 | Security | ⚠️ Malicious SQL tested; prompt injection through column names and cell values, and oversized uploads, not yet tested |
 | End to end (Playwright) | ⚠️ The RQ Fit page was driven with Playwright by hand (load, edit mapping, save, rejected filter); no automated suite yet |
@@ -181,6 +185,7 @@ The verdict rules are written down in `DECISIONS.md`. Plan section 13 asks you t
 - The CI workflow has never run (no remote); pre-commit hooks are not installed.
 - Uploads are spooled to a temporary file by the multipart parser before the size check.
 - The development database contains test data under `smoke@example.com`.
+- An `LLM_API_KEY` is now set in the cloud environment, but its free tier (20 requests a day for this model) is too small for the full benchmarks: one QA run needs well over 100 calls.
 - The 31 gold answers need checking by hand before any accuracy number is reported.
 - The CI smoke eval (15 questions, `run_eval.py --smoke`) needs an `LLM_API_KEY` secret in GitHub before it can run in CI.
 - In ames, `Mas_Vnr_Type` shows 61% missing because the value `None` (meaning no veneer) is treated as a missing-value placeholder. This affects real categories that happen to be spelled `None`.

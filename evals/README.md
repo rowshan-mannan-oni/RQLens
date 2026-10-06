@@ -51,3 +51,12 @@ PYTHONPATH=apps:. python evals/run_eval.py rq                  # the LLM parses 
 The `--gold-mapping` mode checks the measurements and the verdict rules on their own, so mapping errors don't affect the result. The full mode also reports mapping precision and recall: the share of `(role, table.column)` pairs that match the labelled mapping.
 
 The plan's target is 60 labelled pairs, about a third of them partial or not answerable, with a second person labelling 20. The 13 current cases are development cases: one rule was added after seeing one of them (see `DECISIONS.md`), so do not report their agreement as accuracy.
+
+## Insights check (Phase 4)
+
+```sh
+PYTHONPATH=apps:. python evals/run_eval.py insights           # every development dataset
+PYTHONPATH=apps:. python evals/run_eval.py insights --ids mpg
+```
+
+Each dataset runs as its own project, with that dataset's labelled research questions. The report counts insights, findings, charts and confounder flags, and fails if any statement has a number that does not appear in its test result. Set `LLM_API_KEY=` (empty) to run without an LLM.
