@@ -28,6 +28,7 @@ from api.ingest.pipeline import run_combine_plan, run_joins, run_load, run_pii, 
 from api.insights.jobs import generate_insights
 from api.limits import ai_usage, over_limit_message
 from api.llm.client import LLMClient
+from api.observability import init_error_tracking
 from api.profiler.joins import JoinColumn, JoinTable
 from api.rq.jobs import NO_DATA_ERROR, assess_rq, suggest_rqs
 from api.rq.jobs import TRIES as RQ_TRIES
@@ -384,6 +385,10 @@ async def _ready_tables(project_id: int, exclude_dataset_id: int) -> list[JoinTa
         return tables
 
 
+async def startup(ctx: dict[str, Any]) -> None:
+    init_error_tracking("worker")
+
+
 class WorkerSettings:
     functions: ClassVar[list[Any]] = [
         ping,
@@ -394,6 +399,7 @@ class WorkerSettings:
         suggest_rqs,
         generate_insights,
     ]
+    on_startup = startup
     redis_settings = RedisSettings.from_dsn(get_settings().redis_url)
     max_tries = 1  # a CSV that fails to load will fail again; the error is stored instead
     job_timeout = 3600

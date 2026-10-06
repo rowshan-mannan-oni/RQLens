@@ -34,6 +34,9 @@ dev = [
     "pre-commit>=4.0",
 ]
 
+# Error tracking, enabled by SENTRY_DSN (see apps/api/observability.py).
+sentry = ["sentry-sdk>=2.0"]
+
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
@@ -59,7 +62,7 @@ mypy_path = "apps"
 packages = ["api"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "scipy.*", "weasyprint.*", "markdown.*"]
+module = ["arq.*", "scipy.*", "weasyprint.*", "markdown.*", "sentry_sdk.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

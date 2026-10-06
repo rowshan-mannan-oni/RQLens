@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import get_settings
+from api.observability import init_error_tracking
 from api.routes import (
     chat,
     combine,
@@ -20,6 +21,8 @@ from api.routes import (
     rqs,
     usage,
 )
+
+init_error_tracking("api")
 
 
 @asynccontextmanager
