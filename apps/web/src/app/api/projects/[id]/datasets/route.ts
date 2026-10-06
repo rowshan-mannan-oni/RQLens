@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { isId, proxyUpload } from "@/lib/proxy";
+import { isId, proxyPost } from "@/lib/proxy";
 
 export async function POST(
   req: NextRequest,
@@ -8,5 +8,5 @@ export async function POST(
 ) {
   const { id } = await ctx.params;
   if (!isId(id)) return Response.json({ detail: "Not found" }, { status: 404 });
-  return proxyUpload(req, `/projects/${id}/datasets`);
+  return proxyPost(req, `/projects/${id}/datasets`);
 }

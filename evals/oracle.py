@@ -1,4 +1,4 @@
-"""A scripted stand-in for the LLM that answers each case with its gold SQL.
+"""A scripted stand-in for the LLM that answers each case with its gold query.
 
 It checks the harness end to end without an API key: tool calls, the SQL guard and executor,
 grounding and scoring. An oracle run should pass every case; anything less is a harness bug.
@@ -19,26 +19,23 @@ class OracleClient:
         self.case: dict[str, Any] = {}
 
     async def complete(self, messages: Sequence[Message], **kwargs: Any) -> LLMResult[Any]:
-        tool_messages = [m for m in messages if m.get("role") == "tool"]
         case = self.case
+        tool_messages = [m for m in messages if m.get("role") == "tool"]
         if case["expected"] != "answer":
-            return _call(
-                "final_answer",
-                {"kind": case["expected"], "text": "Which column do you mean?", "options": []},
-            )
+            return _call("final_answer", {"kind": case["expected"], "answer": "Which one?"})
         if not tool_messages:
             if case.get("stat_test"):
-                return _call("run_stat_test", {"test": case["stat_test"], "sql": case["gold_sql"]})
-            return _call("run_sql", {"sql": case["gold_sql"]})
+                return _call("run_stat_test", case["stat_test"])
+            return _call("run_sql", {"sql": case["gold_sql"], "purpose": "gold query"})
 
-        last = json.loads(tool_messages[-1]["content"])
+        results = [json.loads(m["content"]) for m in tool_messages]
+        last = next(r for r in reversed(results) if "query_id" in r)
         if "rows" in last:
-            values = [v for row in last["rows"][:5] for v in row]
-            text = "Result: " + ", ".join(str(v) for v in values)
+            text = "Result: " + ", ".join(str(v) for row in last["rows"][:5] for v in row)
         else:
-            text = f"p = {last.get('p_value')}, effect size = {last['effect_size']['value']}"
+            text = f"p = {last['p_value']}, effect size = {last['effect_size']}"
         return _call(
-            "final_answer", {"kind": "answer", "text": text, "query_ids": [last.get("query_id")]}
+            "final_answer", {"kind": "answer", "answer": text, "query_ids": [last["query_id"]]}
         )
 
 

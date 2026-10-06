@@ -144,16 +144,16 @@ def _rows_match(agent: list[list[Any]], gold: list[list[Any]], order_matters: bo
 
 
 def stat_results_match(agent: dict[str, Any], gold: dict[str, Any]) -> bool:
-    """Same test, p-values agree (both below 0.001, or within 5%), effect sizes within 0.02."""
+    """Same test, p-values agree (both below 0.001, or within 5%), effect sizes within 0.02.
+
+    Takes TestResult.to_json() dictionaries.
+    """
     if agent.get("test") != gold.get("test"):
         return False
     pa, pg = agent.get("p_value"), gold.get("p_value")
-    if pa is None or pg is None:
+    ea, eg = agent.get("effect_size"), gold.get("effect_size")
+    if pa is None or pg is None or ea is None or eg is None:
         return False
     p_ok = (pa < 1e-3 and pg < 1e-3) or math.isclose(pa, pg, rel_tol=P_VALUE_REL_TOL)
-    ea = (agent.get("effect_size") or {}).get("value")
-    eg = (gold.get("effect_size") or {}).get("value")
-    if ea is None or eg is None:
-        return False
-    # Cliff's delta flips sign with group order; compare magnitudes.
+    # Rank-biserial flips sign with group order; compare magnitudes.
     return p_ok and abs(abs(ea) - abs(eg)) <= EFFECT_ABS_TOL

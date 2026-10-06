@@ -3,10 +3,11 @@ import "server-only";
 import { API_URL, apiAuthorization } from "@/lib/api";
 
 /**
- * Stream a multipart upload to the API as the signed-in user. Used by route handlers
- * because Server Actions cap request bodies at 1 MB.
+ * Stream a POST body to the API as the signed-in user and stream the response back. Used by
+ * route handlers for uploads (Server Actions cap request bodies at 1 MB) and for chat answers,
+ * which arrive as server-sent events.
  */
-export async function proxyUpload(req: Request, path: string) {
+export async function proxyPost(req: Request, path: string) {
   const authorization = await apiAuthorization();
   if (!authorization) {
     return Response.json({ detail: "Not signed in" }, { status: 401 });
@@ -30,6 +31,7 @@ export async function proxyUpload(req: Request, path: string) {
     status: res.status,
     headers: {
       "Content-Type": res.headers.get("content-type") ?? "application/json",
+      "Cache-Control": res.headers.get("cache-control") ?? "no-store",
     },
   });
 }

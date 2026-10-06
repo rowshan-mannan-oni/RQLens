@@ -1,19 +1,26 @@
-"""Chat about a project's data. Answers stream as server-sent events while the agent works."""
+"""Chats: create, list, read, delete, and ask a question (streamed as server-sent events).
 
+The agent runs in a background task that saves the answer itself, so an answer is not lost
+when the browser disconnects mid-stream.
+"""
+
+import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from arq import ArqRedis
+from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select, update
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.agent.catalog import load_catalog
-from api.agent.loop import AgentAnswer, run_agent
-from api.agent.tools import SqlRun, ToolContext
-from api.db.models import Chat, Message, Project, Query
+from api.agent.loop import Event, Outcome, run_agent
+from api.agent.tools import ColumnInfo, ProjectContext, TableInfo, ToolBox, ToolError
+from api.db.models import Chat, Dataset, DatasetColumn, Message, Project, Query, TableRelationship
 from api.db.session import get_sessionmaker
 from api.llm.client import LLMClient
 from api.routes.deps import OwnedProject, Queue, Session
@@ -22,15 +29,10 @@ from api.sql.executor import QueryResult
 
 router = APIRouter(prefix="/projects/{project_id}/chats", tags=["chat"])
 
-TITLE_CHARS = 80
-HISTORY_LIMIT = 6
+log = logging.getLogger(__name__)
 
-
-def get_llm_client() -> LLMClient:
-    return LLMClient.from_settings()
-
-
-LLM = Annotated[LLMClient, Depends(get_llm_client)]
+NEW_CHAT_TITLE = "New chat"
+_running: set[asyncio.Task[None]] = set()
 
 
 class ChatOut(BaseModel):
@@ -41,62 +43,41 @@ class ChatOut(BaseModel):
     created_at: datetime
 
 
-class ChatCreate(BaseModel):
-    title: str | None = Field(default=None, max_length=TITLE_CHARS)
+class ChatIn(BaseModel):
+    title: str | None = Field(default=None, max_length=300)
+
+
+class QuestionIn(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
 
 
 class QueryOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     sql: str
     row_count: int | None
     duration_ms: int | None
     error: str | None
-    result_preview_json: dict[str, Any] | None
+    columns: list[str]
+    rows: list[list[Any]]
 
 
 class MessageOut(BaseModel):
     id: int
     role: str
     content: str
-    chart: dict[str, Any] | None
-    details: dict[str, Any] | None
-    queries: list[QueryOut]
     created_at: datetime
+    kind: str | None = None  # answer | clarification | cannot_answer | error | pending
+    charts: list[dict[str, Any]] = []
+    steps: list[dict[str, Any]] = []
+    queries: list[QueryOut] = []
+    grounding: dict[str, Any] | None = None
+    usage: dict[str, Any] | None = None
+    stopped: str | None = None
 
 
 class ChatDetail(BaseModel):
     chat: ChatOut
     messages: list[MessageOut]
-
-
-class Ask(BaseModel):
-    content: str = Field(min_length=1, max_length=4000)
-
-
-async def _owned_chat(chat_id: int, project: Project, session: Session) -> Chat:
-    chat = await session.get(Chat, chat_id)
-    if chat is None or chat.project_id != project.id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Chat not found")
-    return chat
-
-
-async def _message_out(session: Any, message: Message) -> MessageOut:
-    queries = list(
-        await session.scalars(
-            select(Query).where(Query.message_id == message.id).order_by(Query.id)
-        )
-    )
-    return MessageOut(
-        id=message.id,
-        role=message.role,
-        content=message.content,
-        chart=message.chart_json,
-        details=message.details_json,
-        queries=[QueryOut.model_validate(q) for q in queries],
-        created_at=message.created_at,
-    )
 
 
 @router.get("")
@@ -108,124 +89,239 @@ async def list_chats(project: OwnedProject, session: Session) -> list[ChatOut]:
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_chat(body: ChatCreate, project: OwnedProject, session: Session) -> ChatOut:
-    chat = Chat(project_id=project.id, title=(body.title or "").strip() or "New chat")
+async def create_chat(body: ChatIn, project: OwnedProject, session: Session) -> ChatOut:
+    chat = Chat(project_id=project.id, title=(body.title or "").strip() or NEW_CHAT_TITLE)
     session.add(chat)
     await session.commit()
     await session.refresh(chat)
     return ChatOut.model_validate(chat)
 
 
+async def _owned_chat(chat_id: int, project_id: int, session: AsyncSession) -> Chat:
+    chat = await session.get(Chat, chat_id)
+    if chat is None or chat.project_id != project_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Chat not found")
+    return chat
+
+
 @router.get("/{chat_id}")
 async def get_chat(chat_id: int, project: OwnedProject, session: Session) -> ChatDetail:
-    chat = await _owned_chat(chat_id, project, session)
-    messages = await session.scalars(
-        select(Message).where(Message.chat_id == chat.id).order_by(Message.id)
-    )
+    chat = await _owned_chat(chat_id, project.id, session)
+    messages = (
+        await session.scalars(
+            select(Message).where(Message.chat_id == chat.id).order_by(Message.id)
+        )
+    ).all()
+    queries = await _queries_by_message(session, [m.id for m in messages])
     return ChatDetail(
         chat=ChatOut.model_validate(chat),
-        messages=[await _message_out(session, m) for m in messages],
+        messages=[_message_out(m, queries.get(m.id, [])) for m in messages],
     )
 
 
 @router.delete("/{chat_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_chat(chat_id: int, project: OwnedProject, session: Session) -> None:
-    chat = await _owned_chat(chat_id, project, session)
-    # Messages go by ON DELETE CASCADE; their logged queries stay, unlinked.
+    chat = await _owned_chat(chat_id, project.id, session)
     await session.delete(chat)
     await session.commit()
 
 
 @router.post("/{chat_id}/messages")
 async def ask(
-    chat_id: int,
-    body: Ask,
-    project: OwnedProject,
-    session: Session,
-    queue: Queue,
-    client: LLM,
+    chat_id: int, body: QuestionIn, project: OwnedProject, session: Session, queue: Queue
 ) -> StreamingResponse:
-    """Ask a question. The response is an event stream: `user`, then `step`s, then `answer`."""
-    chat = await _owned_chat(chat_id, project, session)
-    question = body.content.strip()
-    previous = list(
+    chat = await _owned_chat(chat_id, project.id, session)
+    ctx = await _project_context(session, project)
+    if not ctx.tables:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Upload a dataset before asking questions")
+
+    previous = (
         await session.scalars(
-            select(Message)
-            .where(Message.chat_id == chat.id)
-            .order_by(Message.id.desc())
-            .limit(HISTORY_LIMIT)
+            select(Message).where(Message.chat_id == chat.id).order_by(Message.id)
         )
-    )
-    history = [{"role": m.role, "content": m.content} for m in reversed(previous)]
+    ).all()
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in previous
+        if m.content and (m.trace_json or {}).get("kind") not in ("pending", "error")
+    ]
 
+    question = body.content.strip()
+    if chat.title == NEW_CHAT_TITLE:
+        chat.title = question if len(question) <= 80 else question[:79] + "…"
     user_message = Message(chat_id=chat.id, role="user", content=question)
-    session.add(user_message)
-    if not previous and chat.title == "New chat":
-        chat.title = question[:TITLE_CHARS]
+    reply = Message(chat_id=chat.id, role="assistant", content="", trace_json={"kind": "pending"})
+    session.add_all([user_message, reply])
     await session.commit()
-    catalog = await load_catalog(session, project)
-    project_id, user_message_id = project.id, user_message.id
 
-    async def run_sql(sql: str, row_limit: int) -> SqlRun:
-        async with get_sessionmaker()() as s:
-            try:
-                query_id, result = await execute_logged(
-                    project_id, sql, s, queue, row_limit=row_limit
-                )
-            except HTTPException as exc:
-                return SqlRun(None, QueryResult(sql, [], [], [], 0, False, 0, str(exc.detail)))
-        return SqlRun(query_id, result)
+    events: asyncio.Queue[Event | None] = asyncio.Queue()
+    task = asyncio.create_task(_answer(ctx, queue, question, history, reply.id, events))
+    _running.add(task)
+    task.add_done_callback(_running.discard)
 
-    ctx = ToolContext(catalog=catalog, run_sql=run_sql)
-
-    async def events() -> AsyncIterator[str]:
-        yield _sse("user", {"id": user_message_id, "content": question})
-        if not catalog.tables:
-            async with get_sessionmaker()() as s:
-                message = Message(
-                    chat_id=chat_id,
-                    role="assistant",
-                    content="This project has no ready datasets yet. Upload a CSV first.",
-                    details_json={"kind": "cannot_answer", "stop_reason": "no_data"},
-                )
-                s.add(message)
-                await s.commit()
-                yield _sse("answer", (await _message_out(s, message)).model_dump(mode="json"))
-            return
-
-        answer: AgentAnswer | None = None
-        async for event in run_agent(client, ctx, question, history=history, project_id=project_id):
-            if event.answer is not None:
-                answer = event.answer
-            else:
-                yield _sse("step", event.data)
-        assert answer is not None
-
-        async with get_sessionmaker()() as s:
-            message = Message(
-                chat_id=chat_id,
-                role="assistant",
-                content=answer.text,
-                chart_json=answer.chart,
-                details_json=answer.details(),
-            )
-            s.add(message)
-            await s.flush()
-            # Link every query this answer ran, including failed attempts.
-            ran = [q for q in ctx.query_order if q > 0]
-            if ran:
-                await s.execute(
-                    update(Query).where(Query.id.in_(ran)).values(message_id=message.id)
-                )
-            await s.commit()
-            yield _sse("answer", (await _message_out(s, message)).model_dump(mode="json"))
+    async def stream() -> AsyncIterator[str]:
+        yield _sse({"type": "accepted", "user_message_id": user_message.id, "id": reply.id})
+        while (event := await events.get()) is not None:
+            yield _sse(event)
 
     return StreamingResponse(
-        events(),
+        stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-def _sse(event: str, data: Any) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+async def _answer(
+    ctx: ProjectContext,
+    queue: ArqRedis,
+    question: str,
+    history: list[dict[str, Any]],
+    message_id: int,
+    events: asyncio.Queue[Event | None],
+) -> None:
+    async with get_sessionmaker()() as session:
+
+        async def execute(sql: str, row_limit: int) -> tuple[int, QueryResult]:
+            try:
+                return await execute_logged(
+                    ctx.project_id, sql, session, queue, message_id=message_id, row_limit=row_limit
+                )
+            except HTTPException as exc:
+                raise ToolError(str(exc.detail)) from exc
+
+        box = ToolBox(ctx, execute)
+        outcome: Outcome | None = None
+        try:
+            async for event in run_agent(LLMClient.from_settings(), box, question, history):
+                if event["type"] == "done":
+                    outcome = event["outcome"]
+                else:
+                    events.put_nowait(event)
+        except Exception as exc:
+            log.exception("chat agent failed (message %s)", message_id)
+            outcome = Outcome("error", f"Something went wrong: {type(exc).__name__}.", [], [], None)
+        finally:
+            if outcome is None:
+                outcome = Outcome("error", "The answer was interrupted.", [], [], None)
+            reply = await session.get(Message, message_id)
+            if reply is not None:
+                charts = [c for c in box.state.charts if c["id"] in outcome.chart_ids]
+                reply.content = outcome.answer
+                reply.chart_json = charts or None
+                reply.trace_json = {
+                    "kind": outcome.kind,
+                    "steps": [s.to_json() for s in box.state.steps],
+                    "query_ids": outcome.query_ids,
+                    "grounding": outcome.grounding,
+                    "usage": outcome.usage,
+                    "stopped": outcome.stopped,
+                }
+                await session.commit()
+                queries = await _queries_by_message(session, [reply.id])
+                events.put_nowait(
+                    {
+                        "type": "done",
+                        "message": _message_out(reply, queries.get(reply.id, [])).model_dump(
+                            mode="json"
+                        ),
+                    }
+                )
+            events.put_nowait(None)
+
+
+def _sse(event: Event) -> str:
+    return f"data: {json.dumps(event, ensure_ascii=False, default=str)}\n\n"
+
+
+async def _queries_by_message(
+    session: AsyncSession, message_ids: list[int]
+) -> dict[int, list[QueryOut]]:
+    if not message_ids:
+        return {}
+    out: dict[int, list[QueryOut]] = {}
+    for q in await session.scalars(
+        select(Query).where(Query.message_id.in_(message_ids)).order_by(Query.id)
+    ):
+        preview = q.result_preview_json or {}
+        assert q.message_id is not None
+        out.setdefault(q.message_id, []).append(
+            QueryOut(
+                id=q.id,
+                sql=q.sql,
+                row_count=q.row_count,
+                duration_ms=q.duration_ms,
+                error=q.error,
+                columns=preview.get("columns", []),
+                rows=preview.get("rows", []),
+            )
+        )
+    return out
+
+
+def _message_out(m: Message, queries: list[QueryOut]) -> MessageOut:
+    trace = m.trace_json or {}
+    return MessageOut(
+        id=m.id,
+        role=m.role,
+        content=m.content,
+        created_at=m.created_at,
+        kind=trace.get("kind"),
+        charts=m.chart_json or [],
+        steps=trace.get("steps", []),
+        queries=queries,
+        grounding=trace.get("grounding"),
+        usage=trace.get("usage"),
+        stopped=trace.get("stopped"),
+    )
+
+
+async def _project_context(session: AsyncSession, project: Project) -> ProjectContext:
+    datasets = (
+        await session.scalars(
+            select(Dataset)
+            .where(Dataset.project_id == project.id, Dataset.status == "ready")
+            .order_by(Dataset.id)
+        )
+    ).all()
+    by_id = {d.id: d for d in datasets}
+    columns: dict[int, list[ColumnInfo]] = {}
+    if datasets:
+        for c in await session.scalars(
+            select(DatasetColumn)
+            .where(DatasetColumn.dataset_id.in_(by_id))
+            .order_by(DatasetColumn.id)
+        ):
+            columns.setdefault(c.dataset_id, []).append(
+                ColumnInfo(
+                    name=c.name,
+                    label=c.original_name,
+                    physical_type=c.physical_type,
+                    semantic_type=c.semantic_type,
+                    description=c.description,
+                    description_source=c.description_source,
+                    confidence=c.description_confidence,
+                    is_pii=c.is_pii,
+                    profile=c.profile_json,
+                )
+            )
+    joins = [
+        {
+            "left": f"{by_id[r.left_dataset_id].table_name}.{r.left_column}",
+            "right": f"{by_id[r.right_dataset_id].table_name}.{r.right_column}",
+            "cardinality": r.cardinality,
+        }
+        for r in await session.scalars(
+            select(TableRelationship).where(TableRelationship.project_id == project.id)
+        )
+        if r.left_dataset_id in by_id and r.right_dataset_id in by_id
+    ]
+    return ProjectContext(
+        project_id=project.id,
+        topic=project.topic,
+        share_samples=project.share_samples,
+        tables=[
+            TableInfo(d.table_name, d.original_filename, d.row_count, columns.get(d.id, []))
+            for d in datasets
+        ],
+        joins=joins,
+    )

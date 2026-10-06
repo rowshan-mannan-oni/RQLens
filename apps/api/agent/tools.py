@@ -1,8 +1,10 @@
-"""Tools the chat agent may call, and their implementations.
+"""Tools the chat agent can call, and the per-question state they share.
 
-The model only ever sees metadata, aggregate statistics, masked sample values and query results
-capped at ROW_LIMIT rows. Values from personal-data columns are masked in results sent to the
-model; the researcher still sees them in the app.
+What the model sees is limited: sample and frequent values only when the project shares
+samples, never for personal-data columns, and query results capped at MODEL_ROWS rows with
+emails, phone numbers and long digit runs masked. When a query reads a personal-data column,
+all text cells in its result are hidden from the model. The user still sees full results in the
+"How this was computed" panel.
 """
 
 import json
@@ -11,58 +13,96 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from api.agent.catalog import Catalog, CatalogColumn, CatalogTable
-from api.semantic.describer import column_evidence
+import sqlglot
+from sqlglot import exp
+from sqlglot.errors import SqlglotError
+
+from api.agent.grounding import collect_numbers
+from api.ingest.names import quote
 from api.semantic.pii import scrub
-from api.sql.executor import ROW_LIMIT, QueryResult
-from api.stats.tests import COLUMN_LAYOUT, TESTS, StatTestError, run_test
+from api.sql.executor import QueryResult
+from api.stats.library import TESTS, StatTestError, run_test
 
-WIDE_COLUMNS = 50  # above this, the schema lists columns briefly and search_columns is advised
-MAX_RESULT_CHARS = 24_000  # rows sent to the model are cut to fit this
-STAT_ROW_LIMIT = 200_000
-MAX_SQL_RETRIES = 3
-SEARCH_LIMIT = 10
-CHART_TYPES = ("bar", "line", "scatter", "pie")
-PII_MASK = "<personal data>"
+MODEL_ROWS = 50
+STAT_ROWS = 100_000
+WIDE_TABLE = 50
+MAX_CHART_SERIES = 4
+SAMPLE_KEYS = ("top_values", "samples")
+BULKY_KEYS = ("histogram",)  # aggregates, but long and rarely needed to answer a question
 
-
-@dataclass(frozen=True)
-class SqlRun:
-    query_id: int | None
-    result: QueryResult
-
-
-# Runs a guarded, logged query: (sql, row_limit) -> SqlRun
-RunSql = Callable[[str, int], Awaitable[SqlRun]]
+# (sql, row limit) -> (query id, result)
+Execute = Callable[[str, int], Awaitable[tuple[int, QueryResult]]]
 
 
 @dataclass
-class AgentConfig:
-    """Switches for the experiments in plan.md section 6 (Phase 5)."""
-
-    include_profile: bool = True  # experiment 1: schema only versus schema plus profile
-    include_descriptions: bool = True  # experiment 2
-    self_correction: bool = True  # experiment 3
-    column_retrieval: bool = True  # experiment 6
+class ColumnInfo:
+    name: str
+    label: str | None
+    physical_type: str
+    semantic_type: str | None
+    description: str | None
+    description_source: str | None
+    confidence: str | None
+    is_pii: bool
+    profile: dict[str, Any] | None
 
 
 @dataclass
-class ToolContext:
-    catalog: Catalog
-    run_sql: RunSql
-    config: AgentConfig = field(default_factory=AgentConfig)
-    # State for one question
-    queries: dict[int, QueryResult] = field(default_factory=dict)
-    query_order: list[int] = field(default_factory=list)
-    charts: list[dict[str, Any]] = field(default_factory=list)
-    outputs: list[Any] = field(default_factory=list)  # everything returned to the model
-    sql_failures: int = 0
-    sql_retries: int = 0
-    next_local_id: int = -1  # for queries not logged (no database), ids count down from -1
+class TableInfo:
+    table: str
+    filename: str
+    rows: int | None
+    columns: list[ColumnInfo]
+
+
+@dataclass
+class ProjectContext:
+    project_id: int
+    topic: str | None
+    share_samples: bool
+    tables: list[TableInfo]
+    joins: list[dict[str, Any]] = field(default_factory=list)
+
+    def table(self, name: str) -> TableInfo:
+        for t in self.tables:
+            if t.table.lower() == name.lower():
+                return t
+        raise ToolError(
+            f"Unknown table {name!r}. Tables: {', '.join(t.table for t in self.tables)}."
+        )
+
+    @property
+    def pii_columns(self) -> set[str]:
+        return {c.name.lower() for t in self.tables for c in t.columns if c.is_pii}
 
 
 class ToolError(ValueError):
-    """Bad tool arguments. The message goes back to the model."""
+    """Returned to the model as {"error": ...}."""
+
+
+@dataclass
+class Step:
+    tool: str
+    args: dict[str, Any]
+    summary: str
+    error: str | None = None
+    query_id: int | None = None
+    result: dict[str, Any] | None = None  # stat test result, shown to the user
+
+    def to_json(self) -> dict[str, Any]:
+        return {k: v for k, v in self.__dict__.items() if v is not None}
+
+
+@dataclass
+class ToolState:
+    """Everything produced while answering one question."""
+
+    query_ids: list[int] = field(default_factory=list)
+    results: dict[int, QueryResult] = field(default_factory=dict)
+    charts: list[dict[str, Any]] = field(default_factory=list)
+    steps: list[Step] = field(default_factory=list)
+    numbers: list[float] = field(default_factory=list)  # every number shown to the model
+    sql_errors: int = 0
 
 
 def _fn(name: str, description: str, properties: dict[str, Any], required: list[str]) -> Any:
@@ -76,424 +116,327 @@ def _fn(name: str, description: str, properties: dict[str, Any], required: list[
     }
 
 
+TEST_HELP = "; ".join(f"{name}: {help_}" for name, (_, help_) in TESTS.items())
+
 TOOL_SPECS: list[dict[str, Any]] = [
     _fn(
         "get_schema",
-        "List the tables and columns with types, descriptions and key statistics. "
-        "Pass a table name to see only that table.",
-        {"table": {"type": "string", "description": "Optional table name."}},
+        "Tables, columns, types and descriptions. Optionally one table only.",
+        {"table": {"type": "string"}},
         [],
     ),
     _fn(
         "get_column_profile",
-        "Full profile of one column: missing values, distribution, quantiles, frequent values, "
-        "date range and data-quality warnings.",
+        "Full profile of one column: missing values, distinct count, statistics, frequent "
+        "values, date range.",
         {"table": {"type": "string"}, "column": {"type": "string"}},
         ["table", "column"],
     ),
     _fn(
         "search_columns",
-        "Find columns whose name or description matches a phrase. Use on wide tables.",
+        "Find columns whose name or description matches the words in `query`.",
         {"query": {"type": "string"}},
         ["query"],
     ),
     _fn(
         "run_sql",
-        "Run one read-only DuckDB SELECT over the project tables. Returns at most "
-        f"{ROW_LIMIT} rows plus the true row count. Use it for every number you report.",
-        {"sql": {"type": "string"}},
-        ["sql"],
+        f"Run one read-only DuckDB SELECT over the project's tables. Returns up to {MODEL_ROWS} "
+        "rows and the true row count. Quote identifiers with double quotes.",
+        {
+            "sql": {"type": "string"},
+            "purpose": {"type": "string", "description": "What this query computes, briefly."},
+        },
+        ["sql", "purpose"],
     ),
     _fn(
         "run_stat_test",
-        "Run a statistical test from the fixed library on the two columns a SELECT returns. "
-        + " ".join(f"{t}: {COLUMN_LAYOUT[t]}." for t in TESTS),
+        f"Run a test from the fixed library on two columns of one table. Tests: {TEST_HELP}. "
+        "`where` is an optional SQL condition to filter rows first.",
         {
             "test": {"type": "string", "enum": list(TESTS)},
-            "sql": {"type": "string", "description": "SELECT returning exactly two columns."},
+            "table": {"type": "string"},
+            "x": {"type": "string"},
+            "y": {"type": "string"},
+            "where": {"type": "string"},
         },
-        ["test", "sql"],
+        ["test", "table", "x", "y"],
     ),
     _fn(
         "make_chart",
-        "Create a chart from the result of an earlier run_sql call.",
+        "Chart the result of an earlier run_sql call. `x` is one result column, `y` one or "
+        f"more numeric result columns (at most {MAX_CHART_SERIES}).",
         {
             "query_id": {"type": "integer"},
-            "type": {"type": "string", "enum": list(CHART_TYPES)},
-            "x": {"type": "string", "description": "Result column for the x axis or labels."},
-            "y": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Numeric result columns to plot.",
-            },
+            "type": {"type": "string", "enum": ["bar", "line", "scatter"]},
+            "x": {"type": "string"},
+            "y": {"type": "array", "items": {"type": "string"}},
             "title": {"type": "string"},
         },
         ["query_id", "type", "x", "y", "title"],
     ),
     _fn(
         "final_answer",
-        "Finish with the answer. kind is 'answer', 'clarification' (ask the user to choose "
-        "between interpretations, listing them in options), or 'cannot_answer' (say what is "
-        "missing).",
+        "Finish. `kind` is answer, clarification (you need the user to choose before you can "
+        "answer) or cannot_answer (the data cannot answer it). List the query_ids and "
+        "chart_ids the answer relies on.",
         {
+            "answer": {"type": "string", "description": "Markdown shown to the user."},
             "kind": {"type": "string", "enum": ["answer", "clarification", "cannot_answer"]},
-            "text": {"type": "string", "description": "The answer in Markdown."},
-            "query_ids": {
-                "type": "array",
-                "items": {"type": "integer"},
-                "description": "Queries whose results support the answer.",
-            },
-            "chart_id": {"type": "integer"},
-            "options": {"type": "array", "items": {"type": "string"}},
+            "query_ids": {"type": "array", "items": {"type": "integer"}},
+            "chart_ids": {"type": "array", "items": {"type": "integer"}},
         },
-        ["kind", "text"],
+        ["answer", "kind"],
     ),
 ]
-TOOL_NAMES = {t["function"]["name"] for t in TOOL_SPECS}
+
+FINAL_ONLY = [t for t in TOOL_SPECS if t["function"]["name"] == "final_answer"]
 
 
-def tool_specs(config: AgentConfig) -> list[dict[str, Any]]:
-    if config.column_retrieval:
-        return TOOL_SPECS
-    return [t for t in TOOL_SPECS if t["function"]["name"] != "search_columns"]
+class ToolBox:
+    def __init__(self, ctx: ProjectContext, execute: Execute) -> None:
+        self.ctx = ctx
+        self.execute = execute
+        self.state = ToolState()
 
+    # ----- schema -----
 
-# ---- schema and profiles ---------------------------------------------------------------
+    def schema(self, table: str | None = None) -> dict[str, Any]:
+        tables = [self.ctx.table(table)] if table else self.ctx.tables
+        out: list[dict[str, Any]] = []
+        for t in tables:
+            wide = len(t.columns) > WIDE_TABLE and table is None
+            entry: dict[str, Any] = {"table": t.table, "file": t.filename, "rows": t.rows}
+            if wide:
+                entry["columns"] = [f"{c.name} ({c.semantic_type})" for c in t.columns]
+                entry["note"] = (
+                    f"{len(t.columns)} columns; descriptions omitted. Use search_columns or "
+                    "get_schema with this table."
+                )
+            else:
+                entry["columns"] = [self._column_line(c) for c in t.columns]
+            out.append(entry)
+        result: dict[str, Any] = {"tables": out}
+        if self.ctx.joins and table is None:
+            result["possible_joins"] = self.ctx.joins
+        return result
 
+    @staticmethod
+    def _column_line(c: ColumnInfo) -> dict[str, Any]:
+        line: dict[str, Any] = {
+            "name": c.name,
+            "type": c.semantic_type or c.physical_type,
+            "sql_type": c.physical_type,
+        }
+        if c.label and c.label != c.name:
+            line["header"] = c.label
+        if c.description:
+            line["description"] = c.description
+            if c.description_source == "llm" and c.confidence == "low":
+                line["description_is_a_guess"] = True
+        if c.is_pii:
+            line["personal_data"] = True
+        p = c.profile or {}
+        if p.get("missing_pct"):
+            line["missing_pct"] = round(p["missing_pct"] * 100, 1)
+        return line
 
-def column_summary(column: CatalogColumn, catalog: Catalog, config: AgentConfig) -> dict[str, Any]:
-    if config.include_profile:
-        out = column_evidence(
-            column.name,
-            column.label,
-            column.semantic_type,
-            column.is_pii,
-            column.profile,
-            catalog.share_samples,
+    def column_profile(self, table: str, column: str) -> dict[str, Any]:
+        t = self.ctx.table(table)
+        col = next((c for c in t.columns if c.name.lower() == column.lower()), None)
+        if col is None:
+            raise ToolError(f"Table {t.table} has no column {column!r}.")
+        hidden = (
+            BULKY_KEYS if self.ctx.share_samples and not col.is_pii else BULKY_KEYS + SAMPLE_KEYS
         )
-        if out.get("header") == column.name:
-            out.pop("header")
-    else:
-        out = {"name": column.name, "type": column.semantic_type, "sql_type": column.physical_type}
-    if config.include_descriptions and column.description:
-        out["description"] = column.description
-        if column.confidence == "low" and column.description_source == "llm":
-            out["description_is_guess"] = True
-    return out
+        profile = _drop_keys(col.profile or {}, hidden)
+        if col.is_pii:
+            for key in ("numeric", "datetime", "text"):
+                profile.pop(key, None)
+        out = {"table": t.table, **self._column_line(col), "profile": profile}
+        clean: dict[str, Any] = json.loads(json.dumps(out, default=str))
+        return clean
 
+    def search(self, query: str) -> dict[str, Any]:
+        words = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 1}
+        if not words:
+            raise ToolError("The query has no searchable words.")
+        scored: list[tuple[int, dict[str, Any]]] = []
+        for t in self.ctx.tables:
+            for c in t.columns:
+                name_words = set(re.findall(r"[a-z0-9]+", f"{c.name} {c.label or ''}".lower()))
+                desc_words = set(re.findall(r"[a-z0-9]+", (c.description or "").lower()))
+                score = 3 * len(words & name_words) + len(words & desc_words)
+                score += sum(1 for w in words if any(n.startswith(w) for n in name_words))
+                if score:
+                    scored.append((score, {"table": t.table, **self._column_line(c)}))
+        scored.sort(key=lambda s: -s[0])
+        return {"matches": [m for _, m in scored[:15]]}
 
-def brief_column(column: CatalogColumn, config: AgentConfig) -> str:
-    text = f"{column.name} ({column.semantic_type or column.physical_type})"
-    if config.include_descriptions and column.description:
-        text += f": {_clip(column.description, 80)}"
-    return text
+    # ----- queries -----
 
+    async def run_sql(self, sql: str) -> tuple[int, dict[str, Any]]:
+        query_id, r = await self.execute(sql, 200)
+        self._remember(query_id, r)
+        if r.error:
+            self.state.sql_errors += 1
+            raise ToolError(r.error)
+        rows = self._model_rows(r)
+        out: dict[str, Any] = {
+            "query_id": query_id,
+            "columns": r.columns,
+            "rows": rows,
+            "row_count": r.row_count,
+        }
+        if r.row_count > len(rows):
+            out["note"] = f"Showing {len(rows)} of {r.row_count} rows; aggregate in SQL instead."
+        return query_id, out
 
-def schema_context(catalog: Catalog, config: AgentConfig, table: str | None = None) -> Any:
-    tables = catalog.tables
-    if table is not None:
-        found = catalog.table(table)
-        if found is None:
-            raise ToolError(_unknown_table(table, catalog))
-        tables = [found]
-    wide = sum(len(t.columns) for t in tables) > WIDE_COLUMNS
-    out: dict[str, Any] = {
-        "tables": [
+    def _remember(self, query_id: int, r: QueryResult) -> None:
+        self.state.query_ids.append(query_id)
+        self.state.results[query_id] = r
+
+    def _model_rows(self, r: QueryResult) -> list[list[Any]]:
+        hide = self._reads_pii(r.sql)
+        rows: list[list[Any]] = []
+        for row in r.rows[:MODEL_ROWS]:
+            rows.append(
+                [("<masked>" if hide else scrub(v)) if isinstance(v, str) else v for v in row]
+            )
+        return rows
+
+    def _reads_pii(self, sql: str) -> bool:
+        pii = self.ctx.pii_columns
+        if not pii:
+            return False
+        try:
+            tree = sqlglot.parse_one(sql, read="duckdb")
+        except SqlglotError:
+            return True
+        if any(c.name.lower() in pii for c in tree.find_all(exp.Column)):
+            return True
+        # SELECT * or t.* (count(*) is fine).
+        return any(
+            isinstance(e, exp.Star) or (isinstance(e, exp.Column) and isinstance(e.this, exp.Star))
+            for select in tree.find_all(exp.Select)
+            for e in select.expressions
+        )
+
+    async def stat_test(
+        self, test: str, table: str, x: str, y: str, where: str | None
+    ) -> tuple[int, dict[str, Any]]:
+        if test not in TESTS:
+            raise ToolError(f"Unknown test {test!r}. Available: {', '.join(TESTS)}.")
+        t = self.ctx.table(table)
+        names = {c.name.lower(): c.name for c in t.columns}
+        for col in (x, y):
+            if col.lower() not in names:
+                raise ToolError(f"Table {t.table} has no column {col!r}.")
+        cx, cy = quote(names[x.lower()]), quote(names[y.lower()])
+        inner = f"SELECT {cx} AS x, {cy} AS y FROM {quote(t.table)}"
+        if where and where.strip():
+            inner += f" WHERE {where}"
+        sql = (
+            f"SELECT * FROM ({inner}) AS s USING SAMPLE reservoir({STAT_ROWS} ROWS) REPEATABLE (42)"
+        )
+        query_id, r = await self.execute(sql, STAT_ROWS)
+        self._remember(query_id, r)
+        if r.error:
+            self.state.sql_errors += 1
+            raise ToolError(r.error)
+        try:
+            result = run_test(test, [row[0] for row in r.rows], [row[1] for row in r.rows])
+        except StatTestError as exc:
+            raise ToolError(str(exc)) from exc
+        out = {"query_id": query_id, **result.to_json()}
+        if r.row_count > STAT_ROWS:
+            out["note"] = (out.get("note") or "") + (
+                f" Run on a random sample of {STAT_ROWS} of {r.row_count} rows."
+            )
+        return query_id, out
+
+    def chart(self, query_id: int, kind: str, x: str, y: list[str], title: str) -> dict[str, Any]:
+        r = self.state.results.get(query_id)
+        if r is None or r.error:
+            raise ToolError(f"No successful query with id {query_id} in this answer.")
+        if kind not in ("bar", "line", "scatter"):
+            raise ToolError("type must be bar, line or scatter.")
+        if not y or len(y) > MAX_CHART_SERIES:
+            raise ToolError(f"Give 1 to {MAX_CHART_SERIES} y columns.")
+        missing = [c for c in [x, *y] if c not in r.columns]
+        if missing:
+            raise ToolError(f"Not in the result: {', '.join(missing)}. Columns: {r.columns}.")
+        ix = r.columns.index(x)
+        iy = [r.columns.index(c) for c in y]
+        for c, i in zip(y, iy, strict=True):
+            if any(row[i] is not None and not isinstance(row[i], int | float) for row in r.rows):
+                raise ToolError(f"Column {c} is not numeric.")
+        chart_id = len(self.state.charts) + 1
+        self.state.charts.append(
             {
-                "table": t.name,
-                "file": t.filename,
-                "rows": t.row_count,
-                "columns": [
-                    brief_column(c, config) if wide else column_summary(c, catalog, config)
-                    for c in t.columns
+                "id": chart_id,
+                "query_id": query_id,
+                "type": kind,
+                "title": title,
+                "x": x,
+                "y": y,
+                "data": [
+                    {x: row[ix], **{c: row[i] for c, i in zip(y, iy, strict=True)}}
+                    for row in r.rows
                 ],
+                "truncated": r.truncated,
             }
-            for t in tables
-        ]
-    }
-    if catalog.joins and table is None:
-        out["possible_joins"] = catalog.joins
-    if wide:
-        out["note"] = (
-            "Many columns, so they are listed briefly. Use search_columns to find columns and "
-            "get_column_profile for details."
         )
-    return out
+        return {"chart_id": chart_id, "points": len(r.rows)}
 
+    # ----- dispatch -----
 
-def column_profile(catalog: Catalog, config: AgentConfig, table: str, column: str) -> Any:
-    t = catalog.table(table)
-    if t is None:
-        raise ToolError(_unknown_table(table, catalog))
-    c = t.column(column)
-    if c is None:
-        raise ToolError(f"Table {t.name} has no column '{column}'. Use get_schema to list them.")
-
-    out = column_summary(c, catalog, config)
-    p = c.profile
-    out.update(
-        {
-            "missing": p.get("missing"),
-            "missing_pct": round(p.get("missing_pct", 0) * 100, 2),
-            "distinct": p.get("distinct"),
-            "uniqueness": _round(p.get("uniqueness")),
-        }
-    )
-    numeric = p.get("numeric")
-    if numeric and numeric.get("finite"):
-        out["numeric"] = {
-            k: _round(numeric.get(k))
-            for k in ("min", "max", "mean", "median", "std", "skew", "outliers", "zero_share")
-        }
-        out["numeric"]["quantiles"] = {k: _round(v) for k, v in numeric["quantiles"].items()}
-    dates = p.get("datetime")
-    if dates:
-        out["datetime"] = {
-            k: dates.get(k) for k in ("min", "max", "granularity", "period", "empty_periods")
-        }
-    categorical = p.get("categorical")
-    if categorical:
-        out["categorical"] = {k: _round(v) for k, v in categorical.items()}
-    if catalog.share_samples and not c.is_pii and p.get("top_values"):
-        out["frequent_values"] = [
-            {"value": _clip(scrub(str(v["value"])), 60), "count": v["count"]}
-            for v in p["top_values"][:15]
-        ]
-    warnings = [w["message"] for w in t.warnings if w.get("column") == c.name]
-    if warnings:
-        out["warnings"] = warnings
-    return out
-
-
-def search_columns(catalog: Catalog, query: str) -> Any:
-    """Rank columns by word overlap with name, header and description."""
-    words = _words(query)
-    if not words:
-        raise ToolError("Give a phrase to search for.")
-    scored = []
-    for t in catalog.tables:
-        for c in t.columns:
-            name_words = _words(f"{c.name} {c.label}")
-            text_words = _words(c.description or "")
-            score = 2 * _overlap(words, name_words) + _overlap(words, text_words)
-            if score > 0:
-                scored.append((score, t.name, c))
-    scored.sort(key=lambda s: -s[0])
-    return {
-        "matches": [
-            {
-                "table": table,
-                "column": c.name,
-                "type": c.semantic_type,
-                "description": c.description,
-            }
-            for _, table, c in scored[:SEARCH_LIMIT]
-        ]
-    }
-
-
-def _words(text: str) -> set[str]:
-    return {w.rstrip("s") for w in re.findall(r"[a-z0-9]+", text.lower()) if len(w) > 1}
-
-
-def _overlap(query: set[str], words: set[str]) -> float:
-    # Prefix matches count, so "experience" finds "exp_years" and "exp" finds "experience".
-    return sum(
-        1.0 if q in words else 0.5
-        for q in query
-        if q in words
-        or any(len(min(q, w, key=len)) >= 3 and (w.startswith(q) or q.startswith(w)) for w in words)
-    )
-
-
-# ---- queries ----------------------------------------------------------------------------
-
-
-async def run_sql(ctx: ToolContext, sql: str) -> Any:
-    if ctx.sql_failures > 0 and ctx.sql_retries >= MAX_SQL_RETRIES:
-        raise ToolError(
-            f"The query failed {ctx.sql_failures} times in a row and the retry limit is reached. "
-            "Do not run more SQL; call final_answer and explain what could not be computed."
-        )
-    run = await ctx.run_sql(sql, ROW_LIMIT)
-    query_id = _register(ctx, run)
-    r = run.result
-    if r.error:
-        if ctx.sql_failures > 0:
-            ctx.sql_retries += 1
-        ctx.sql_failures += 1
-        out: dict[str, Any] = {"query_id": query_id, "error": r.error}
-        if not ctx.config.self_correction:
-            out["note"] = "Retrying is disabled. Call final_answer."
-            ctx.sql_retries = MAX_SQL_RETRIES
-        else:
-            left = MAX_SQL_RETRIES - ctx.sql_retries
-            out["note"] = f"Fix the query and try again ({left} retries left)."
+    async def call(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+        """Run one tool. Errors become {"error": ...} so the model can correct itself."""
+        step = Step(tool=name, args=args, summary="")
+        try:
+            out = await self._dispatch(name, args, step)
+        except ToolError as exc:
+            step.error = str(exc)
+            step.summary = step.summary or "failed"
+            out = {"error": str(exc)}
+        except (KeyError, TypeError) as exc:
+            step.error = f"Bad arguments: {exc}"
+            out = {"error": step.error}
+        self.state.steps.append(step)
+        if "error" not in out:
+            self.state.numbers += collect_numbers(out)
         return out
 
-    ctx.sql_failures = 0
-    ctx.sql_retries = 0
-    rows = mask_rows(r, ctx.catalog.pii_columns)
-    shown, cut = _fit_rows(rows)
-    out = {
-        "query_id": query_id,
-        "columns": r.columns,
-        "rows": shown,
-        "row_count": r.row_count,
-    }
-    if r.truncated or cut:
-        out["note"] = f"Showing {len(shown)} of {r.row_count} rows."
-    return out
-
-
-async def run_stat_test(ctx: ToolContext, test: str, sql: str) -> Any:
-    if test not in TESTS:
-        raise ToolError(f"Unknown test '{test}'. Available: {', '.join(TESTS)}.")
-    run = await ctx.run_sql(sql, STAT_ROW_LIMIT)
-    query_id = _register(ctx, run)
-    r = run.result
-    if r.error:
-        return {"query_id": query_id, "error": r.error, "note": "Fix the query and try again."}
-    if len(r.columns) != 2:
-        raise ToolError(f"{test} needs a query returning {COLUMN_LAYOUT[test]}.")
-    try:
-        result = run_test(test, r.rows)
-    except StatTestError as exc:
-        return {"query_id": query_id, "error": str(exc)}
-    result["query_id"] = query_id
-    result["columns"] = r.columns
-    if r.truncated:
-        result["note"] = f"Tested on the first {len(r.rows)} of {r.row_count} rows."
-    result["caveat"] = "Exploratory: a significant result is a hypothesis to test, not a finding."
-    return result
-
-
-def make_chart(ctx: ToolContext, query_id: int, type: str, x: str, y: list[str], title: str) -> Any:
-    result = ctx.queries.get(query_id)
-    if result is None or result.error:
-        raise ToolError(f"No successful query with id {query_id} in this answer.")
-    if type not in CHART_TYPES:
-        raise ToolError(f"Chart type must be one of {', '.join(CHART_TYPES)}.")
-    missing = [c for c in [x, *y] if c not in result.columns]
-    if missing:
-        raise ToolError(
-            f"Columns not in the result: {', '.join(missing)}. "
-            f"Available: {', '.join(result.columns)}."
-        )
-    if not y:
-        raise ToolError("Give at least one y column.")
-    if type == "pie" and len(y) != 1:
-        raise ToolError("A pie chart takes exactly one y column.")
-    chart_id = len(ctx.charts) + 1
-    ctx.charts.append(
-        {
-            "chart_id": chart_id,
-            "query_id": query_id,
-            "type": type,
-            "x": x,
-            "y": y,
-            "title": _clip(title, 200),
-            "data": [dict(zip(result.columns, row, strict=True)) for row in result.rows],
-        }
-    )
-    return {"chart_id": chart_id, "points": len(result.rows)}
-
-
-def _register(ctx: ToolContext, run: SqlRun) -> int:
-    query_id = run.query_id
-    if query_id is None:
-        query_id = ctx.next_local_id
-        ctx.next_local_id -= 1
-    ctx.queries[query_id] = run.result
-    ctx.query_order.append(query_id)
-    return query_id
-
-
-def mask_rows(result: QueryResult, pii_columns: set[str]) -> list[list[Any]]:
-    """Rows as the model sees them: personal-data columns masked, other text scrubbed."""
-    masked = [c.lower() in pii_columns for c in result.columns]
-    return [
-        [
-            PII_MASK if m and v is not None else scrub(v) if isinstance(v, str) else v
-            for v, m in zip(row, masked, strict=True)
-        ]
-        for row in result.rows
-    ]
-
-
-def _fit_rows(rows: list[list[Any]]) -> tuple[list[list[Any]], bool]:
-    total = 0
-    for i, row in enumerate(rows):
-        total += len(json.dumps(row, default=str))
-        if total > MAX_RESULT_CHARS:
-            return rows[:i], True
-    return rows, False
-
-
-# ---- dispatch ---------------------------------------------------------------------------
-
-
-async def call_tool(ctx: ToolContext, name: str, args: dict[str, Any]) -> Any:
-    """Run one tool and return its JSON-able result. Errors become {"error": ...}."""
-    try:
+    async def _dispatch(self, name: str, a: dict[str, Any], step: Step) -> dict[str, Any]:
         if name == "get_schema":
-            out = schema_context(ctx.catalog, ctx.config, _opt_str(args, "table"))
-        elif name == "get_column_profile":
-            out = column_profile(ctx.catalog, ctx.config, _str(args, "table"), _str(args, "column"))
-        elif name == "search_columns" and ctx.config.column_retrieval:
-            out = search_columns(ctx.catalog, _str(args, "query"))
-        elif name == "run_sql":
-            out = await run_sql(ctx, _str(args, "sql"))
-        elif name == "run_stat_test":
-            out = await run_stat_test(ctx, _str(args, "test"), _str(args, "sql"))
-        elif name == "make_chart":
-            y = args.get("y")
-            if isinstance(y, str):
-                y = [y]
-            if not isinstance(y, list) or not all(isinstance(v, str) for v in y):
-                raise ToolError("y must be a list of column names.")
-            out = make_chart(
-                ctx, _int(args, "query_id"), _str(args, "type"), _str(args, "x"), y,
-                _str(args, "title"),
-            )  # fmt: skip
-        else:
-            raise ToolError(f"Unknown tool '{name}'.")
-    except ToolError as exc:
-        out = {"error": str(exc)}
-    ctx.outputs.append(out)
-    return out
+            step.summary = f"Read the schema{' of ' + a['table'] if a.get('table') else ''}"
+            return self.schema(a.get("table") or None)
+        if name == "get_column_profile":
+            step.summary = f"Read the profile of {a['table']}.{a['column']}"
+            return self.column_profile(a["table"], a["column"])
+        if name == "search_columns":
+            step.summary = f"Searched columns for “{a['query']}”"
+            return self.search(a["query"])
+        if name == "run_sql":
+            step.summary = str(a.get("purpose") or "Ran a query")
+            step.query_id, out = await self.run_sql(a["sql"])
+            return out
+        if name == "run_stat_test":
+            step.summary = f"Ran {a['test']} on {a['table']}.{a['x']} and {a['y']}"
+            step.query_id, out = await self.stat_test(
+                a["test"], a["table"], a["x"], a["y"], a.get("where")
+            )
+            step.result = {k: v for k, v in out.items() if k != "query_id"}
+            return out
+        if name == "make_chart":
+            step.summary = f"Made a {a['type']} chart: {a['title']}"
+            return self.chart(int(a["query_id"]), a["type"], a["x"], list(a["y"]), a["title"])
+        raise ToolError(f"Unknown tool {name!r}.")
 
 
-def _str(args: dict[str, Any], key: str) -> str:
-    value = args.get(key)
-    if not isinstance(value, str) or not value.strip():
-        raise ToolError(f"'{key}' is required and must be text.")
-    return value
-
-
-def _opt_str(args: dict[str, Any], key: str) -> str | None:
-    value = args.get(key)
-    return value if isinstance(value, str) and value.strip() else None
-
-
-def _int(args: dict[str, Any], key: str) -> int:
-    value = args.get(key)
-    if isinstance(value, bool) or not isinstance(value, int | float) or int(value) != value:
-        raise ToolError(f"'{key}' must be an integer.")
-    return int(value)
-
-
-def _unknown_table(name: str, catalog: Catalog) -> str:
-    return f"Unknown table '{name}'. Tables: {', '.join(t.name for t in catalog.tables)}."
-
-
-def _round(value: Any) -> Any:
-    return round(value, 4) if isinstance(value, float) else value
-
-
-def _clip(text: str, limit: int) -> str:
-    return text if len(text) <= limit else text[: limit - 1] + "…"
-
-
-def tables_overview(tables: list[CatalogTable]) -> str:
-    return ", ".join(f"{t.name} ({t.row_count} rows, {len(t.columns)} columns)" for t in tables)
+def _drop_keys(profile: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        k: _drop_keys(v, keys) if isinstance(v, dict) else v
+        for k, v in profile.items()
+        if k not in keys
+    }

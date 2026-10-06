@@ -6,7 +6,7 @@
     python evals/run_eval.py qa --smoke          # 15-question smoke set
     python evals/run_eval.py qa --ids cps-01 cps-02
 
-Run from the repository root with PYTHONPATH=apps:. (the Makefile-free way: see README).
+Run from the repository root with PYTHONPATH=apps:. so both `api` and `evals` import.
 Reports go to evals/reports/.
 """
 
@@ -20,15 +20,16 @@ import time
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
+from itertools import count
 from pathlib import Path
 from typing import Any
 
-from api.agent.loop import PROMPT_VERSION, AgentAnswer, Limits, run_agent
-from api.agent.tools import AgentConfig, SqlRun, ToolContext
+from api.agent.loop import PROMPT_VERSION, Limits, Outcome, run_agent
+from api.agent.tools import ProjectContext, ToolBox
 from api.llm.client import LLMClient
 from api.llm.tracing import null_tracer
-from api.sql.executor import ROW_LIMIT, run_query
-from api.stats.tests import run_test
+from api.sql.executor import ROW_LIMIT, QueryResult, run_query
+from api.stats.library import run_test
 from evals import local_project
 from evals.oracle import OracleClient
 from evals.scoring import results_match, stat_results_match
@@ -38,6 +39,7 @@ QA_FILE = EVALS / "qa" / "questions.v1.jsonl"
 GOLD_FILE = EVALS / "qa" / "gold.v1.json"
 REPORTS = EVALS / "reports"
 GOLD_PREVIEW_ROWS = 20
+STAT_ROWS = 100_000
 
 # A spread of categories for the per-pull-request smoke run.
 SMOKE_IDS = [
@@ -53,14 +55,16 @@ def load_cases(ids: list[str] | None = None, smoke: bool = False) -> list[dict[s
     return [c for c in cases if c["id"] in wanted] if wanted else cases
 
 
-def gold_result(db: Path, case: dict[str, Any], tables: list[str]) -> dict[str, Any]:
-    r = run_query(db, case["gold_sql"], tables, row_limit=ROW_LIMIT)
+def gold_result(db: Path, case: dict[str, Any]) -> dict[str, Any]:
+    limit = STAT_ROWS if case.get("stat_test") else ROW_LIMIT
+    r = run_query(db, case["gold_sql"], case["tables"], row_limit=limit)
     if r.error:
         raise RuntimeError(f"{case['id']}: gold SQL failed: {r.error}")
     out: dict[str, Any] = {"columns": r.columns, "rows": r.rows, "row_count": r.row_count}
     if case.get("stat_test"):
-        stat_rows = run_query(db, case["gold_sql"], tables, row_limit=200_000).rows
-        out["stat"] = run_test(case["stat_test"], stat_rows)
+        test = case["stat_test"]["test"]
+        out["stat"] = run_test(test, [x for x, _ in r.rows], [y for _, y in r.rows]).to_json()
+        out["rows"] = []  # the raw pairs are input to the test, not the answer
     return out
 
 
@@ -72,83 +76,75 @@ def check_gold(db: Path, cases: list[dict[str, Any]]) -> None:
             gold[case["id"]] = {"expected": case["expected"]}
             print(f"{case['id']:18} expects {case['expected']}")
             continue
-        g = gold_result(db, case, case["tables"])
-        preview = {**g, "rows": g["rows"][:GOLD_PREVIEW_ROWS]}
-        gold[case["id"]] = preview
-        shown = g["stat"] if "stat" in g else g["rows"][:3]
-        print(f"{case['id']:18} {g['row_count']:>4} rows  {json.dumps(shown, default=str)[:110]}")
+        g = gold_result(db, case)
+        gold[case["id"]] = {**g, "rows": g["rows"][:GOLD_PREVIEW_ROWS]}
+        shown = g.get("stat") or g["rows"][:3]
+        print(f"{case['id']:18} {g['row_count']:>5} rows  {json.dumps(shown, default=str)[:110]}")
     GOLD_FILE.write_text(json.dumps(gold, indent=1, default=str) + "\n")
     print(f"\nWrote {GOLD_FILE.relative_to(EVALS.parent)}. Check each result by hand.")
 
 
 async def run_case(
-    client: Any, db: Path, catalog: Any, case: dict[str, Any], config: AgentConfig, model: Any
+    client: Any, db: Path, ctx: ProjectContext, case: dict[str, Any], limits: Limits
 ) -> dict[str, Any]:
     tables = case["tables"]
+    ids = count(1)
 
-    async def run_sql(sql: str, row_limit: int) -> SqlRun:
-        return SqlRun(
-            None, await asyncio.to_thread(run_query, db, sql, tables, row_limit=row_limit)
-        )
+    async def execute(sql: str, row_limit: int) -> tuple[int, QueryResult]:
+        r = await asyncio.to_thread(run_query, db, sql, tables, row_limit=row_limit)
+        return next(ids), r
 
-    ctx = ToolContext(catalog=local_project.subset(catalog, tables), run_sql=run_sql, config=config)
+    box = ToolBox(local_project.subset(ctx, tables), execute)
     if isinstance(client, OracleClient):
         client.case = case
-    answer: AgentAnswer | None = None
-    async for event in run_agent(client, ctx, case["question"], model=model):
-        if event.answer is not None:
-            answer = event.answer
-    assert answer is not None
+    outcome: Outcome | None = None
+    async for event in run_agent(client, box, case["question"], limits=limits):
+        if event["type"] == "done":
+            outcome = event["outcome"]
+    assert outcome is not None
 
-    passed, reason = score(db, case, answer, ctx)
+    passed, reason = score(db, case, outcome, box)
+    usage = outcome.usage
     return {
         "id": case["id"],
         "category": case["category"],
         "expected": case["expected"],
-        "kind": answer.kind,
+        "kind": outcome.kind,
         "passed": passed,
         "reason": reason,
-        "grounded": answer.grounding.get("grounded"),
-        "unsupported_numbers": answer.grounding.get("unsupported"),
-        "tool_calls": answer.usage.tool_calls,
-        "llm_calls": answer.usage.llm_calls,
-        "sql_errors": answer.sql_errors,
-        "input_tokens": answer.usage.input_tokens,
-        "output_tokens": answer.usage.output_tokens,
-        "cost_usd": str(answer.usage.cost_usd),
-        "latency_ms": answer.latency_ms,
-        "stop_reason": answer.stop_reason,
-        "answer": answer.text,
-        "sql": [ctx.queries[q].sql for q in answer.query_ids if q in ctx.queries],
+        "grounded": bool(outcome.grounding and outcome.grounding["ok"]),
+        "unsupported_numbers": (outcome.grounding or {}).get("unsupported", []),
+        "stopped": outcome.stopped,
+        **usage,
+        "answer": outcome.answer,
+        "sql": [box.state.results[q].sql for q in outcome.query_ids if q in box.state.results],
     }
 
 
-def score(
-    db: Path, case: dict[str, Any], answer: AgentAnswer, ctx: ToolContext
-) -> tuple[bool, str]:
+def score(db: Path, case: dict[str, Any], outcome: Outcome, box: ToolBox) -> tuple[bool, str]:
     if case["expected"] != "answer":
-        ok = answer.kind == case["expected"]
-        return ok, "" if ok else f"expected {case['expected']}, got {answer.kind}"
-    if answer.kind != "answer":
-        return False, f"expected an answer, got {answer.kind}"
+        ok = outcome.kind == case["expected"]
+        return ok, "" if ok else f"expected {case['expected']}, got {outcome.kind}"
+    if outcome.kind != "answer":
+        return False, f"expected an answer, got {outcome.kind}"
 
-    gold = gold_result(db, case, case["tables"])
+    gold = gold_result(db, case)
     if case.get("stat_test"):
-        tests = [o for o in ctx.outputs if isinstance(o, dict) and "p_value" in o]
+        tests = [s.result for s in box.state.steps if s.tool == "run_stat_test" and s.result]
         if any(stat_results_match(t, gold["stat"]) for t in tests):
             return True, ""
         return False, "no matching statistical test" if tests else "no statistical test run"
 
-    cited = [ctx.queries[q] for q in answer.query_ids if q in ctx.queries]
-    for r in cited:
-        if not r.error and results_match(r.rows, gold["rows"], order_matters=case["order_matters"]):
-            return True, ""
-    others = [ctx.queries[q] for q in ctx.query_order if q not in answer.query_ids]
-    if any(
-        not r.error and results_match(r.rows, gold["rows"], order_matters=case["order_matters"])
-        for r in others
-    ):
-        return False, "a matching query ran but was not cited in the answer"
+    def matches(query_id: int) -> bool:
+        r = box.state.results[query_id]
+        return not r.error and results_match(
+            r.rows, gold["rows"], order_matters=case["order_matters"]
+        )
+
+    if any(matches(q) for q in outcome.query_ids if q in box.state.results):
+        return True, ""
+    if any(matches(q) for q in box.state.query_ids if q not in outcome.query_ids):
+        return False, "a matching query ran but the answer did not cite it"
     return False, "no cited query matches the gold result"
 
 
@@ -160,6 +156,7 @@ def summarise(results: list[dict[str, Any]], meta: dict[str, Any]) -> str:
     for r in results:
         by_cat[r["category"]].append(r["passed"])
     answered = [r for r in results if r["kind"] == "answer"]
+    n = len(results)
     lines = [
         f"# QA eval {meta['started']}",
         "",
@@ -169,11 +166,12 @@ def summarise(results: list[dict[str, Any]], meta: dict[str, Any]) -> str:
         "| Metric | Value |",
         "|---|---|",
         f"| Execution accuracy | {pct([r['passed'] for r in results])} |",
-        f"| Grounded answers | {pct([bool(r['grounded']) for r in answered])} |",
-        f"| Mean tool calls | {sum(r['tool_calls'] for r in results) / len(results):.1f} |",
-        f"| SQL errors (retries) | {sum(r['sql_errors'] for r in results)} |",
+        f"| Grounded answers | {pct([r['grounded'] for r in answered])} |",
+        f"| Mean tool calls | {sum(r['tool_calls'] for r in results) / n:.1f} |",
+        f"| Failed queries | {sum(r['sql_errors'] for r in results)} |",
+        f"| Grounding retries | {sum(r['grounding_retries'] for r in results)} |",
         f"| Total cost (USD) | {sum(Decimal(r['cost_usd']) for r in results):.4f} |",
-        f"| Mean latency | {sum(r['latency_ms'] for r in results) / len(results) / 1000:.1f} s |",
+        f"| Mean latency | {sum(r['duration_ms'] for r in results) / n / 1000:.1f} s |",
         "",
         "| Category | Accuracy |",
         "|---|---|",
@@ -202,12 +200,9 @@ async def main() -> int:
     parser.add_argument("suite", choices=["qa"])
     parser.add_argument("--check-gold", action="store_true")
     parser.add_argument("--llm", choices=["settings", "oracle"], default="settings")
-    parser.add_argument("--model", default=None)
+    parser.add_argument("--model", default=None, help="override LLM_MODEL")
     parser.add_argument("--ids", nargs="*")
     parser.add_argument("--smoke", action="store_true")
-    parser.add_argument("--no-profile", action="store_true", help="experiment 1")
-    parser.add_argument("--no-descriptions", action="store_true", help="experiment 2")
-    parser.add_argument("--no-retry", action="store_true", help="experiment 3")
     args = parser.parse_args()
 
     cases = load_cases(args.ids, args.smoke)
@@ -215,31 +210,30 @@ async def main() -> int:
         db = Path(tmp) / "eval.duckdb"
         names = sorted({t for c in cases for t in c["tables"]})
         print(f"Loading {len(names)} datasets…", file=sys.stderr)
-        catalog = local_project.build(db, names)
+        ctx = local_project.build(db, names)
         if args.check_gold:
             check_gold(db, cases)
             return 0
 
-        client: Any = (
-            OracleClient() if args.llm == "oracle" else LLMClient.from_settings(tracer=null_tracer)
-        )
-        config = AgentConfig(
-            include_profile=not args.no_profile,
-            include_descriptions=not args.no_descriptions,
-            self_correction=not args.no_retry,
-        )
+        client: Any
+        if args.llm == "oracle":
+            client = OracleClient()
+        else:
+            client = LLMClient.from_settings(tracer=null_tracer)
+            if args.model:
+                client.model = args.model
+        limits = Limits()
         meta = {
             "started": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
             "llm": args.llm,
-            "model": args.model or getattr(client, "model", "?"),
+            "model": client.model,
             "git_sha": git_sha(),
-            "config": vars(config),
-            "limits": vars(Limits()),
+            "limits": vars(limits),
         }
         results = []
         for case in cases:
             t0 = time.perf_counter()
-            r = await run_case(client, db, catalog, case, config, args.model)
+            r = await run_case(client, db, ctx, case, limits)
             results.append(r)
             mark = "PASS" if r["passed"] else "FAIL"
             print(f"{mark} {case['id']:18} {time.perf_counter() - t0:5.1f}s {r['reason']}")

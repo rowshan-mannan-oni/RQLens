@@ -89,6 +89,21 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         </button>
       </form>
 
+      {datasets.some((d) => d.status === "ready") && (
+        <Link
+          href={`/projects/${project.id}/chat`}
+          className="flex items-center justify-between rounded-lg border border-zinc-200 p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+        >
+          <span>
+            <span className="font-medium">Chat with your data</span>{" "}
+            <span className="text-zinc-600 dark:text-zinc-400">
+              Ask questions; every answer shows the queries behind it.
+            </span>
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
+
       <UploadForm projectId={project.id} />
 
       <section className="flex flex-col gap-3">

@@ -1,313 +1,280 @@
-"""The chat agent: a bounded tool loop that answers one question about a project's data.
+"""Bounded tool loop for one chat question.
 
-Each step asks the model for tool calls, runs them and feeds the results back, until the model
-calls final_answer or a limit is reached. Before an answer is accepted, the grounding check
-confirms every number in it appeared in a tool result; if not, the model gets one chance to fix
-the answer, after which it is flagged.
-
-Progress is yielded as events so the API can stream it to the browser.
+The model calls tools until it calls `final_answer`. Limits: tool calls, failed queries,
+tokens and wall-clock time. When a limit is reached the model gets one last turn in which only
+`final_answer` is offered. A final answer whose numbers do not appear in any tool result is
+sent back once for correction; if it still fails it is returned with a grounding flag.
 """
 
+import asyncio
 import json
+import re
 import time
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
+
+from openai import RateLimitError
 
 from api.agent import grounding
-from api.agent.tools import (
-    TOOL_SPECS,
-    ToolContext,
-    call_tool,
-    schema_context,
-    tool_specs,
-)
-from api.llm.client import LLMClient, LLMResult, ToolCall
+from api.agent.tools import FINAL_ONLY, TOOL_SPECS, ToolBox
+from api.llm.client import LLMClient, Message, ToolCall
 
 PROMPT_VERSION = "chat_agent.v1"
 PROMPT = (Path(__file__).parent.parent / "prompts" / f"{PROMPT_VERSION}.md").read_text(
     encoding="utf-8"
 )
-FINAL_ANSWER_SPEC = next(t for t in TOOL_SPECS if t["function"]["name"] == "final_answer")
-HISTORY_MESSAGES = 6
-HISTORY_CHARS = 2_000
-
-AnswerKind = Literal["answer", "clarification", "cannot_answer", "error"]
+HISTORY_MESSAGES = 10
+RETRY_IN = re.compile(r"retry in (?:(\d+)m)?([\d.]+)s", re.IGNORECASE)
+SCHEMA_IN_PROMPT_CHARS = 30_000
 
 
-@dataclass
+@dataclass(frozen=True)
 class Limits:
-    max_tool_calls: int = 15
-    max_tokens: int = 200_000  # input plus output, summed over all model calls
-    max_seconds: float = 120.0
+    max_tool_calls: int = 12
+    max_sql_errors: int = 3
+    token_budget: int = 200_000
+    time_budget_s: float = 240.0
+    # Free tiers limit requests per minute; wait out a limit this short, up to this many times.
+    rate_limit_wait_s: float = 65.0
+    rate_limit_waits: int = 3
+    grounding_retries: int = 1
+    # Extra tool calls allowed after a rejected answer, so the model can run the missing query.
+    retry_tool_calls: int = 3
 
 
 @dataclass
-class Usage:
-    llm_calls: int = 0
-    tool_calls: int = 0
-    input_tokens: int = 0
-    output_tokens: int = 0
-    cost_usd: Decimal = Decimal(0)
-
-    def add(self, result: LLMResult[Any]) -> None:
-        self.llm_calls += 1
-        self.input_tokens += result.input_tokens
-        self.output_tokens += result.output_tokens
-        self.cost_usd += result.cost_usd
-
-
-@dataclass
-class AgentAnswer:
-    kind: AnswerKind
-    text: str
+class Outcome:
+    kind: str  # answer | clarification | cannot_answer | error
+    answer: str
     query_ids: list[int]
-    chart: dict[str, Any] | None
-    options: list[str]
-    grounding: dict[str, Any]
-    flagged: bool  # numbers in the answer could not be traced to a tool result
-    stop_reason: str
-    usage: Usage
-    latency_ms: int
-    sql_errors: int
-    steps: list[dict[str, Any]] = field(default_factory=list)
-
-    def details(self) -> dict[str, Any]:
-        """JSON stored with the assistant message."""
-        return {
-            "kind": self.kind,
-            "query_ids": self.query_ids,
-            "options": self.options,
-            "grounding": self.grounding,
-            "flagged": self.flagged,
-            "stop_reason": self.stop_reason,
-            "steps": self.steps,
-            "sql_errors": self.sql_errors,
-            "prompt_version": PROMPT_VERSION,
-            "usage": {
-                "llm_calls": self.usage.llm_calls,
-                "tool_calls": self.usage.tool_calls,
-                "input_tokens": self.usage.input_tokens,
-                "output_tokens": self.usage.output_tokens,
-                "cost_usd": str(self.usage.cost_usd),
-                "latency_ms": self.latency_ms,
-            },
-        }
+    chart_ids: list[int]
+    grounding: dict[str, Any] | None
+    stopped: str | None = None  # which limit ended the loop, if any
+    usage: dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
-class AgentEvent:
-    type: Literal["step", "answer"]
-    data: dict[str, Any]
-    answer: AgentAnswer | None = None
+Event = dict[str, Any]
 
 
-def build_messages(
-    ctx: ToolContext, question: str, history: Sequence[dict[str, str]]
-) -> list[dict[str, Any]]:
-    schema = {"research_topic": ctx.catalog.topic, **schema_context(ctx.catalog, ctx.config)}
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": PROMPT},
-        {
-            "role": "system",
-            "content": "<schema>\n"
-            + json.dumps(schema, ensure_ascii=False, default=str)
-            + "\n</schema>",
-        },
-    ]
-    for m in history[-HISTORY_MESSAGES:]:
-        content = m["content"][:HISTORY_CHARS]
-        if m["role"] == "user":
-            content = f"<question>\n{content}\n</question>"
-        messages.append({"role": m["role"], "content": content})
-    messages.append({"role": "user", "content": f"<question>\n{question}\n</question>"})
-    return messages
+def system_prompt(box: ToolBox) -> str:
+    schema = json.dumps(box.schema(), ensure_ascii=False, default=str)
+    if len(schema) > SCHEMA_IN_PROMPT_CHARS:
+        schema = json.dumps(
+            {"tables": [{"table": t.table, "rows": t.rows} for t in box.ctx.tables]},
+            ensure_ascii=False,
+        )
+        schema += "\n(The schema is large; call get_schema with a table name or search_columns.)"
+    project = {"research_topic": box.ctx.topic} if box.ctx.topic else {}
+    return PROMPT.replace(
+        "{project}",
+        (json.dumps(project, ensure_ascii=False) + "\n\n" if project else "")
+        + f"<schema>\n{schema}\n</schema>",
+    )
 
 
 async def run_agent(
     client: LLMClient,
-    ctx: ToolContext,
+    box: ToolBox,
     question: str,
+    history: Sequence[Message] = (),
     *,
-    history: Sequence[dict[str, str]] = (),
-    limits: Limits | None = None,
-    project_id: int | None = None,
-    eval_run_id: int | None = None,
-    model: str | None = None,
-) -> AsyncIterator[AgentEvent]:
-    limits = limits or Limits()
+    limits: Limits = Limits(),  # noqa: B008
+) -> AsyncIterator[Event]:
+    """Yield progress events; the last one is {"type": "done", "outcome": Outcome}."""
     started = time.perf_counter()
-    usage = Usage()
-    steps: list[dict[str, Any]] = []
-    messages = build_messages(ctx, question, history)
-    tools = tool_specs(ctx.config)
-    regrounded = False
-    sql_errors = 0
+    messages: list[Message] = [
+        {"role": "system", "content": system_prompt(box)},
+        *list(history)[-HISTORY_MESSAGES:],
+        {"role": "user", "content": question},
+    ]
+    # Numbers the user wrote, or earlier answers stated, may be repeated.
+    box.state.numbers += grounding.collect_numbers(question, [m.get("content") for m in history])
 
-    def elapsed_ms() -> int:
-        return round((time.perf_counter() - started) * 1000)
+    tokens = llm_calls = 0
+    cost = Decimal(0)
+    tool_calls = 0
+    tool_limit = limits.max_tool_calls
+    rejections = rate_waits = 0
+    stopped: str | None = None
 
-    def finish(
-        kind: AnswerKind,
-        text: str,
-        stop_reason: str,
-        *,
-        query_ids: Sequence[int] = (),
-        chart_id: int | None = None,
-        options: Sequence[str] = (),
-        check: grounding.GroundingResult | None = None,
-    ) -> AgentEvent:
-        known = [q for q in query_ids if q in ctx.queries]
-        if not known:
-            # Every answer shows its queries: default to all successful ones.
-            known = [q for q in ctx.query_order if not ctx.queries[q].error]
-        chart = next((c for c in ctx.charts if c["chart_id"] == chart_id), None)
-        if chart is None and kind == "answer" and len(ctx.charts) == 1:
-            chart = ctx.charts[0]
-        check = check or grounding.check(text, ctx.outputs, question=question, sql=_sql_texts(ctx))
-        answer = AgentAnswer(
-            kind=kind,
-            text=text,
-            query_ids=list(dict.fromkeys(known)),
-            chart=chart,
-            options=[str(o) for o in options][:6],
-            grounding=check.summary(),
-            flagged=not check.grounded and kind != "error",
-            stop_reason=stop_reason,
-            usage=usage,
-            latency_ms=elapsed_ms(),
-            sql_errors=sql_errors,
-            steps=steps,
-        )
-        return AgentEvent("answer", {"kind": kind}, answer)
+    def usage() -> dict[str, Any]:
+        return {
+            "llm_calls": llm_calls,
+            "tool_calls": tool_calls,
+            "tokens": tokens,
+            "cost_usd": str(cost),
+            "sql_errors": box.state.sql_errors,
+            "grounding_retries": rejections,
+            "duration_ms": round((time.perf_counter() - started) * 1000),
+        }
 
-    async def model_call(only_final: bool = False) -> LLMResult[Any]:
-        result = await client.complete(
-            messages,
-            step="chat_agent",
-            prompt_version=PROMPT_VERSION,
-            project_id=project_id,
-            eval_run_id=eval_run_id,
-            model=model,
-            tools=[FINAL_ANSWER_SPEC] if only_final else tools,
-            tool_choice="required" if only_final else "auto",
-        )
-        usage.add(result)
-        messages.append(result.assistant_message())
-        return result
+    def finish(kind: str, answer: str, args: dict[str, Any], check: Any) -> Event:
+        known = set(box.state.query_ids)
+        charts = {c["id"] for c in box.state.charts}
+        return {
+            "type": "done",
+            "outcome": Outcome(
+                kind=kind,
+                answer=answer,
+                query_ids=[q for q in _ints(args.get("query_ids")) if q in known]
+                or box.state.query_ids,
+                chart_ids=[c for c in _ints(args.get("chart_ids")) if c in charts]
+                or sorted(charts),
+                grounding=check.to_json() if check else None,
+                stopped=stopped,
+                usage=usage(),
+            ),
+        }
 
-    stop_reason = ""
     while True:
-        if usage.tool_calls >= limits.max_tool_calls:
-            stop_reason = "limit_tool_calls"
-        elif usage.input_tokens + usage.output_tokens >= limits.max_tokens:
-            stop_reason = "limit_tokens"
-        elif time.perf_counter() - started >= limits.max_seconds:
-            stop_reason = "limit_time"
-        if stop_reason:
-            break
+        if stopped is None:
+            elapsed = time.perf_counter() - started
+            if tool_calls >= tool_limit:
+                stopped = "tool_calls"
+            elif box.state.sql_errors >= limits.max_sql_errors:
+                stopped = "sql_errors"
+            elif tokens >= limits.token_budget:
+                stopped = "tokens"
+            elif elapsed >= limits.time_budget_s:
+                stopped = "time"
+            if stopped:
+                messages.append({"role": "user", "content": _LIMIT_NOTES[stopped]})
+        final_turn = stopped is not None
 
+        yield {"type": "status", "text": "Writing the answer" if final_turn else "Thinking"}
         try:
-            result = await model_call()
-        except Exception as exc:
-            yield finish("error", f"The AI model could not be reached: {exc}", "llm_error")
+            result = await client.complete(
+                messages,
+                step="chat_agent",
+                prompt_version=PROMPT_VERSION,
+                project_id=box.ctx.project_id,
+                tools=FINAL_ONLY if final_turn else TOOL_SPECS,
+                tool_choice="required",
+            )
+        except RateLimitError as exc:
+            wait = retry_after(exc)
+            if (
+                wait is not None
+                and wait <= limits.rate_limit_wait_s
+                and rate_waits < (limits.rate_limit_waits)
+            ):
+                rate_waits += 1
+                yield {"type": "status", "text": f"Waiting {wait:.0f} s for the AI rate limit"}
+                await asyncio.sleep(wait + 1)
+                continue
+            yield finish("error", _rate_limited(wait), {}, None)
             return
+        except Exception as exc:
+            yield finish(
+                "error",
+                f"The AI service failed: {type(exc).__name__}. Please try again in a minute.",
+                {},
+                None,
+            )
+            return
+        llm_calls += 1
+        tokens += result.input_tokens + result.output_tokens
+        cost += result.cost_usd
 
         if not result.tool_calls:
-            # A plain text reply ends the turn.
-            yield finish("answer", result.text.strip() or "(no answer)", "text_reply")
+            # The model replied in plain text. Accept it as the answer, still checked.
+            text = result.text.strip() or "I could not produce an answer."
+            yield finish("answer", text, {}, grounding.check(text, box.state.numbers))
             return
 
-        final: ToolCall | None = None
+        messages.append(result.message or {"role": "assistant", "content": result.text})
+        final: tuple[ToolCall, dict[str, Any]] | None = None
         for call in result.tool_calls:
-            if call.name == "final_answer" and final is None:
-                final = call
-                continue
             args = _parse_args(call)
-            usage.tool_calls += 1
+            if call.name == "final_answer" and args is not None:
+                final = (call, args)
+                continue
             if args is None:
-                output: Any = {"error": "The arguments were not valid JSON."}
+                out: dict[str, Any] = {"error": "Arguments were not valid JSON."}
+            elif final_turn:
+                out = {"error": "Limit reached; only final_answer is available."}
             else:
-                output = await call_tool(ctx, call.name, args)
-            if isinstance(output, dict) and output.get("error") and call.name == "run_sql":
-                sql_errors += 1
-            step = _step_summary(call.name, args or {}, output)
-            steps.append(step)
-            yield AgentEvent("step", step)
-            messages.append(_tool_message(call.id, output))
+                yield {"type": "status", "text": _STATUS.get(call.name, "Working")}
+                out = await box.call(call.name, args)
+                tool_calls += 1
+                yield {"type": "step", "step": box.state.steps[-1].to_json()}
+            messages.append(_tool_message(call, out))
 
         if final is None:
-            continue
-
-        args = _parse_args(final) or {}
-        kind: AnswerKind = "answer"
-        if args.get("kind") in ("clarification", "cannot_answer"):
-            kind = args["kind"]
-        text = str(args.get("text") or "").strip()
-        query_ids = [int(q) for q in args.get("query_ids") or [] if isinstance(q, int | float)]
-        chart_id = args.get("chart_id") if isinstance(args.get("chart_id"), int) else None
-        raw_options = args.get("options")
-        options = [str(o) for o in raw_options] if isinstance(raw_options, list) else []
-
-        check = grounding.check(text, ctx.outputs, question=question, sql=_sql_texts(ctx))
-        if not text:
-            messages.append(_tool_message(final.id, {"error": "text is empty."}))
-            continue
-        if not check.grounded and not regrounded:
-            regrounded = True
-            steps.append({"tool": "grounding_check", "unsupported": check.unsupported})
-            yield AgentEvent("step", steps[-1])
-            messages.append(
-                _tool_message(
-                    final.id,
-                    {
-                        "error": "These numbers in your answer do not appear in any tool "
-                        f"result: {', '.join(check.unsupported)}. Compute them with run_sql, "
-                        "or remove them, then call final_answer again."
-                    },
+            if final_turn:
+                yield finish(
+                    "error", "I could not finish within the limits for one question.", {}, None
                 )
-            )
+                return
             continue
-        messages.append(_tool_message(final.id, {"ok": True}))
-        yield finish(
-            kind,
-            text,
-            "final_answer",
-            query_ids=query_ids,
-            chart_id=chart_id,
-            options=options,
-            check=check,
-        )
-        return
 
-    # A limit was reached: ask for an answer with what is known so far.
-    messages.append(
-        {
-            "role": "user",
-            "content": f"The {stop_reason.removeprefix('limit_').replace('_', ' ')} limit for "
-            "this question is reached. Call final_answer now using only the results you have, "
-            "and say what remains unanswered.",
-        }
-    )
-    try:
-        result = await model_call(only_final=True)
-    except Exception as exc:
-        yield finish("error", f"The AI model could not be reached: {exc}", "llm_error")
-        return
-    final = next((c for c in result.tool_calls if c.name == "final_answer"), None)
-    args = (_parse_args(final) if final else None) or {}
-    text = str(args.get("text") or result.text or "").strip()
-    if not text:
-        text = "I could not finish this question within the limits. Try a narrower question."
-    yield finish(
-        "answer",
-        text,
-        stop_reason,
-        query_ids=[int(q) for q in args.get("query_ids") or [] if isinstance(q, int | float)],
-        check=grounding.check(text, ctx.outputs, question=question, sql=_sql_texts(ctx)),
-    )
+        call, args = final
+        answer = str(args.get("answer") or "").strip()
+        kind = str(args.get("kind") or "answer")
+        if kind not in ("answer", "clarification", "cannot_answer"):
+            kind = "answer"
+        check = grounding.check(answer, box.state.numbers)
+        if check.ok or rejections >= limits.grounding_retries or not answer:
+            yield finish(kind, answer or "No answer was given.", args, check)
+            return
+
+        rejections += 1
+        yield {"type": "status", "text": "Checking numbers against the queries"}
+        messages.append(
+            _tool_message(
+                call,
+                {
+                    "error": "Answer rejected: these numbers do not appear in any tool result: "
+                    + ", ".join(check.unsupported)
+                    + ". Compute them with run_sql, or remove them, then call final_answer again."
+                },
+            )
+        )
+        # Allow a few more calls to compute the missing numbers, even past the limit.
+        tool_limit = max(tool_limit, tool_calls + limits.retry_tool_calls)
+        if stopped == "tool_calls":
+            stopped = None
+
+
+_STATUS = {
+    "get_schema": "Reading the schema",
+    "get_column_profile": "Reading a column profile",
+    "search_columns": "Searching columns",
+    "run_sql": "Running a query",
+    "run_stat_test": "Running a statistical test",
+    "make_chart": "Making a chart",
+}
+
+_LIMIT_NOTES = {
+    "tool_calls": "You have used all tool calls for this question.",
+    "sql_errors": "Three queries have failed.",
+    "tokens": "The token budget for this question is used up.",
+    "time": "The time limit for this question has been reached.",
+}
+_LIMIT_NOTES = {
+    k: v + " Call final_answer now with what you have found, and say what is unfinished."
+    for k, v in _LIMIT_NOTES.items()
+}
+
+
+def retry_after(exc: Exception) -> float | None:
+    """Seconds the provider asks us to wait, if it says (Gemini: "Please retry in 24.4s")."""
+    m = RETRY_IN.search(str(exc))  # "retry in 14h39m30s" (a daily limit) does not match
+    if m is None:
+        return None
+    return int(m.group(1) or 0) * 60 + float(m.group(2))
+
+
+def _rate_limited(wait: float | None) -> str:
+    if wait is None:
+        return (
+            "The AI service's usage limit has been reached (it may be a daily limit). "
+            "Please try again later."
+        )
+    return f"The AI service is busy (rate limit). Please try again in {wait:.0f} seconds."
 
 
 def _parse_args(call: ToolCall) -> dict[str, Any] | None:
@@ -318,38 +285,21 @@ def _parse_args(call: ToolCall) -> dict[str, Any] | None:
     return args if isinstance(args, dict) else None
 
 
-def _tool_message(call_id: str, output: Any) -> dict[str, Any]:
+def _tool_message(call: ToolCall, content: dict[str, Any]) -> Message:
     return {
         "role": "tool",
-        "tool_call_id": call_id,
-        "content": json.dumps(output, ensure_ascii=False, default=str),
+        "tool_call_id": call.id,
+        "content": json.dumps(content, ensure_ascii=False, default=str),
     }
 
 
-def _sql_texts(ctx: ToolContext) -> list[str]:
-    return [r.sql for r in ctx.queries.values()]
-
-
-def _step_summary(name: str, args: dict[str, Any], output: Any) -> dict[str, Any]:
-    """A short record of one tool call for the UI and the stored message."""
-    step: dict[str, Any] = {"tool": name}
-    out = output if isinstance(output, dict) else {}
-    if name in ("run_sql", "run_stat_test"):
-        step["query_id"] = out.get("query_id")
-        if name == "run_stat_test":
-            step["test"] = args.get("test")
-            if "p_value" in out:
-                step["p_value"] = out["p_value"]
-                step["effect_size"] = out.get("effect_size")
-                step["n"] = out.get("n")
-        elif "row_count" in out:
-            step["row_count"] = out["row_count"]
-    elif name in ("get_column_profile",):
-        step["column"] = f"{args.get('table')}.{args.get('column')}"
-    elif name == "search_columns":
-        step["query"] = args.get("query")
-    elif name == "make_chart":
-        step["chart_id"] = out.get("chart_id")
-    if out.get("error"):
-        step["error"] = out["error"]
-    return step
+def _ints(values: Any) -> list[int]:
+    if not isinstance(values, list):
+        return []
+    out: list[int] = []
+    for v in values:
+        try:
+            out.append(int(v))
+        except (TypeError, ValueError):
+            continue
+    return out

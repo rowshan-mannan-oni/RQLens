@@ -3,8 +3,11 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  /* Charts: one series colour, recessive grid and axes (dataviz reference palette). */
+  /* Charts: categorical slots 1-4 in fixed order, recessive grid and axes (dataviz reference palette). */
   --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
   --chart-grid: #e7e6e2;
   --chart-axis: #52514e;
   --chart-surface: #ffffff;
@@ -22,6 +25,9 @@
     --background: #0a0a0a;
     --foreground: #ededed;
     --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
     --chart-grid: #2c2c2a;
     --chart-axis: #c3c2b7;
     --chart-surface: #0a0a0a;
