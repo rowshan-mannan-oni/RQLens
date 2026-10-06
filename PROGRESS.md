@@ -1,6 +1,6 @@
 # RQ Lens: progress checklist
 
-Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (Phase 6).
+Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (Phase 7).
 
 Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not started
 
@@ -15,7 +15,7 @@ Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not sta
 | 4. Insights | Done; the AI-assisted planning and wording not yet run with a working model |
 | 5. Evaluation | Harness and first 31 chat questions in place; benchmarks not run |
 | 6. Export, polish, deployment | Done except the hosted deployment and the demo video (both need your accounts) |
-| 7. Literature review (cited extraction) | Planned (added to plan.md); not started |
+| 7. Literature review (cited extraction) | Built and tested end to end with a scripted model; benchmark D harness in place on 5 synthetic papers; waiting on real papers and a real-model run |
 
 Extra features added on request (not in the plan): multi-file upload, compare and combine datasets, delete with confirmation.
 
@@ -174,21 +174,68 @@ The ranking weights and confounder rules are written down in `DECISIONS.md` as a
 
 ## Phase 7: Literature review with cited extraction
 
-Planned in plan.md (Phase 7). This is a new module modelled on tools like Anara: papers become a review table, and every cell cites the exact sentence it came from.
+A second module in each project, on the new **Literature** tab: papers become a review table where every value cites the sentences it came from, and the citations are checked against the paper.
 
-- [ ] Upload PDFs one by one, many at once, or a whole folder (browser folder picker or drag-and-drop); duplicates skipped by hash.
-- [ ] Parse PDFs with positions (PyMuPDF): pages, lines, bounding boxes; strip headers and footers; detect sections; read metadata; flag scanned PDFs as "needs OCR".
-- [ ] Split into numbered, citable passages (about one sentence each) with their page and highlight rectangles.
-- [ ] Templates: a built-in literature-review template (title, authors, year, problem, RQs, approach, datasets, metrics, results, findings, limitations, conclusion, future work), and user-defined templates with typed columns and instructions.
-- [ ] Extraction per paper: values plus cited passage IDs and short quotes. The LLM can only cite IDs it was given; long papers use passages retrieved per column.
-- [ ] Citation check without an LLM: the quote must match the cited passage (exact or fuzzy) and numbers must appear in it; one retry, then "unverified".
-- [ ] Review table UI: sticky title column, sort and filter, status markers, inline citation markers with hover previews.
-- [ ] Reader: PDF.js side panel that opens at the cited page with the sentence highlighted; step through a cell's citations; passage text shown alongside.
-- [ ] Editing and re-runs (cell, column, paper, table); user edits are never overwritten; export to CSV, Excel and Markdown with citations, and BibTeX.
-- [ ] Link papers to research questions; include the table in the dataset report.
-- [ ] Benchmark D: 20 to 30 open-access papers with hand-filled tables and supporting sentences. Metrics: cell accuracy, citation precision and recall, not-found accuracy, unverified rate, cost and time. Experiments 7 to 9.
+**Step 1: Bring in the papers**
 
-**Done when:** a folder of 20 papers becomes a filled table in under 5 minutes, every non-empty cell's citation opens the right page with the sentence highlighted, benchmark D runs end to end, and custom templates work the same way.
+- [x] Upload many PDFs at once, or a whole folder: the folder picker and drag-and-drop of a folder both upload every PDF inside it (other files are ignored), three at a time, keeping the subfolder path as a label.
+- [x] Limits: 50 MB per PDF, 200 papers per project (settings). Duplicates are detected by SHA-256 and skipped with "Already in this project as …". Files that are not PDFs are refused.
+- [ ] Optional later: BibTeX, RIS or Zotero import.
+
+**Step 2: Parse each paper into citable passages** (`apps/api/papers/parser.py`)
+
+- [x] Text with positions (PyMuPDF, character by character); running headers, footers, page numbers and rotated margin stamps removed; hyphenated line breaks joined.
+- [x] Passages: one per sentence, never across pages, labelled `P3-S12`, each with its page, section and one rectangle per line. Paragraphs that continue across blocks or columns stay whole.
+- [x] Sections from heading words, numbering and font (including "Abstract—" inline). Reference entries are kept but never sent to the model or cited.
+- [x] Metadata (title, authors, year, venue, DOI) from the PDF's metadata and its first page. Editable; corrections survive re-reading.
+- [x] Scanned PDFs are detected and marked "needs OCR". OCR itself is not done.
+- [x] Two-column layouts read in column order; captions are one passage. Equations are skipped rather than shown as image regions.
+- [~] Unit tests on single- and two-column papers, a scanned paper and reference lists, using **generated** papers (`evals/literature/synth.py`), because this sandbox cannot download open-access PDFs. Real PDFs should be added.
+
+**Step 3: Templates** (`apps/api/review/templates.py`)
+
+- [x] Built-in literature review template with the 13 columns of the plan, each with instructions.
+- [x] User templates: add, remove, rename, reorder columns; label, instructions, kind (text, list, number, category with options), required, and "fill from the PDF's details". Reusable across projects. Editor at Literature → "Make or edit your own template".
+- [x] More built-ins: empirical software engineering, clinical study (PICO), systematic review screening.
+- [x] Add a column to an existing table; only that column is extracted.
+
+**Step 4: Extraction with citations** (`apps/api/review/extract.py`, `citations.py`)
+
+- [x] One call per paper with the columns and the numbered passages; the reply gives, per column, a value, cited passage IDs with quotes, a confidence, or not found with a reason (prompt `review_extract.v1`).
+- [x] Unknown passage IDs are dropped; references are never offered.
+- [x] Citation check without an LLM: exact match after normalising case, spacing, quotes, dashes and hyphenation, or fuzzy ≥ 0.9; numbers must appear in the cited passages; categories must be an option. Failing cells are retried once with the problems listed, then marked **unverified**.
+- [x] Long papers (over 60,000 characters) send the abstract, conclusion and the most relevant passages per column (words, section headings, embeddings when available).
+- [x] Metadata columns come from the parsed PDF first, cited to the first page, with no AI call.
+- [x] One background job per paper and table; transient provider errors retry (30, 60, 90 s); cells fill in as jobs finish; new papers are added to existing tables automatically.
+- [x] Every call is traced in `llm_calls` (step `review_extract`, prompt version); the Usage page shows it. Over the monthly AI limit, metadata cells still fill and the rest say why.
+
+**Step 5: The review table and the reader**
+
+- [x] Table: sticky paper column and header, resizable and pinnable columns (remembered per browser), sort by any column, text filter, filters for "needs attention", "not found" and "edited", long cells clamped with "show more", markers for not found, unverified, edited, accepted and low confidence.
+- [x] Citation markers `[1] [2]` with the quote and page on hover; clicking opens the **reader**.
+- [x] Reader: PDF.js side panel at the cited page, the passage's line rectangles highlighted, previous/next citation, page navigation, and the passage text above the PDF with the quote marked (so a citation still reads if the PDF fails to render). Uses PDF.js's legacy build, because the modern one needs JavaScript features many current browsers lack.
+- [x] Editing: change any cell (lists one item per line, numbers, category options); edits are never overwritten; go back to the AI value; accept or reject; re-run a cell, a column, a paper or the table.
+- [x] Export: CSV (with a citations column), Excel (with a Citations sheet: paper, column, passage, page, quote, verified), Markdown with numbered citations, BibTeX.
+- [ ] Later: chat across papers with the same citations.
+
+**Step 6: Connect to the rest of RQ Lens**
+
+- [x] Papers related to a research question: choose an RQ in the table toolbar to see the papers whose problem, questions or findings share its terms, with the matching cells shaded (no LLM; see `DECISIONS.md`).
+- [x] The dataset report has an appendix with the newest literature table: per paper, each value with the pages it cites, unverified values marked, and the fields the paper does not state.
+
+**Evaluation (benchmark D)** (`evals/lit_eval.py`, `run_eval.py lit`)
+
+- [~] 5 synthetic papers of different layouts and fields (software engineering, health, ML, a clinical trial, a qualitative study) with all 65 cells labelled. The plan's 20 to 30 **real** open-access papers still need collecting and labelling by hand; the runner accepts real PDFs in `evals/literature/pdfs/`.
+- [x] Metrics: cell accuracy (key-term rubric; an LLM judge is not built), citation precision and recall, not-found accuracy, unverified rate, cost, time and calls per paper.
+- [x] Planted cases: a paper with no limitations section, and a paper whose abstract and results disagree.
+- [x] Experiments wired: 7 (`--retrieval`), 8 (`--no-check`), 9 (`--model`).
+- [x] Oracle self-test: 100% on every metric across all 5 papers, so the parser, the check and the scoring agree.
+
+**Done when:** a folder of 20 papers becomes a filled table in under 5 minutes, every non-empty cell's citation opens the right page with the sentence highlighted, benchmark D runs end to end, and custom templates work the same way. ⚠️ Partly met:
+
+- Folder upload, filling, the reader with highlights, and custom templates work end to end in the browser, against the real API, worker, Postgres and Redis with a scripted model server.
+- Benchmark D runs end to end (oracle).
+- **Not yet run with a real model**, and not yet timed on 20 real papers.
 
 ## Extra features (added on request)
 
@@ -201,7 +248,7 @@ Planned in plan.md (Phase 7). This is a new module modelled on tools like Anara:
 
 | Level | Status |
 |---|---|
-| Unit | ✅ 232 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects |
+| Unit | ✅ 264 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects, PDF parsing (generated papers), citation check, extraction with retry (scripted model), exports, RQ linking, benchmark D oracle |
 | Integration | ⚠️ The oracle eval test runs the real loader, profiler, agent loop, guard and executor on real datasets. The full API (Postgres, Redis, worker, streaming chat) was checked with a manual script, not an automated test |
 | Security | ⚠️ Malicious SQL tested; prompt injection through column names and cell values, and oversized uploads, not yet tested |
 | End to end (Playwright) | ⚠️ The RQ Fit page was driven with Playwright by hand (load, edit mapping, save, rejected filter); no automated suite yet |

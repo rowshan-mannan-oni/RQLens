@@ -5,6 +5,8 @@ import datetime as dt
 from api.report.builder import (
     ColumnRow,
     DatasetSection,
+    LiteratureAppendix,
+    LiteraturePaper,
     QuestionSection,
     ReportData,
     _summary,
@@ -120,3 +122,25 @@ def test_pdf_renders() -> None:
     assert "<table>" in to_html(md, "t") and "<title>t</title>" in to_html(md, "t")
     pdf = to_pdf(md, "Dataset report")
     assert pdf.startswith(b"%PDF") and len(pdf) > 5_000
+
+
+def test_literature_appendix() -> None:
+    r = sample()
+    assert "Appendix A" not in render_markdown(r)
+    r.literature = LiteratureAppendix(
+        "Review | 2024",
+        [
+            LiteraturePaper(
+                "Graph Networks",
+                "Okafor et al., 2023",
+                [("Results", "F1 of 0.64", [1, 2], False), ("Metrics", "F1; AUC", [], True)],
+                ["Limitations"],
+            )
+        ],
+    )
+    md = render_markdown(r)
+    assert md.index("## 6. Limitations") < md.index("## Appendix A. Literature: Review \\| 2024")
+    assert "### Graph Networks (Okafor et al., 2023)" in md
+    assert "- **Results:** F1 of 0.64 (p. 1, 2)" in md
+    assert "- **Metrics:** F1; AUC *unverified*" in md
+    assert "- *Not stated:* Limitations" in md

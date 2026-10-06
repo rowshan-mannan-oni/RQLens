@@ -441,62 +441,62 @@ A second module in each project: turn the researcher's papers into a review tabl
 
 **Step 1: Bring in the papers**
 
-- [ ] Upload many PDFs at once, and **choose a folder**: the browser's folder picker (`<input webkitdirectory>`) and drag-and-drop of a folder both upload every PDF inside it, keeping the subfolder path as a label. The server cannot read the user's disk, so a folder is always uploaded, never linked.
-- [ ] Limits: 50 MB per PDF and 200 papers per project at first. Duplicates are detected by file hash and skipped.
+- [x] Upload many PDFs at once, and **choose a folder**: the browser's folder picker (`<input webkitdirectory>`) and drag-and-drop of a folder both upload every PDF inside it, keeping the subfolder path as a label. The server cannot read the user's disk, so a folder is always uploaded, never linked.
+- [x] Limits: 50 MB per PDF and 200 papers per project at first. Duplicates are detected by file hash and skipped.
 - [ ] Optional later: import a BibTeX or RIS file, or a Zotero collection, to attach metadata and file links.
 
 **Step 2: Parse each paper into citable passages**
 
-- [ ] Extract text **with positions** using PyMuPDF: every line keeps its page and bounding box. Remove running headers, footers and page numbers by detecting text that repeats on most pages. Join hyphenated line breaks.
-- [ ] Split into **passages**, normally one sentence each and never across pages, numbered per paper (`P3-S12`, or an ordinal). Each passage keeps its page, its line range and one rectangle per line, which is what the viewer highlights.
-- [ ] Detect sections (Abstract, Introduction, Method, Results, Discussion, Limitations, Conclusion, References) from font size and common heading words. The reference list is kept for display but never cited as evidence.
-- [ ] Read metadata (title, authors, year, venue, DOI) from the PDF's metadata and its first page. GROBID can improve this and parse references if the simple approach is not good enough.
-- [ ] **Scanned PDFs** have no text layer. Detect this (almost no extractable characters) and mark the paper "needs OCR". OCR with positions (Tesseract or a cloud OCR) is a later step.
-- [ ] Two-column layouts, tables and equations: read lines in column order using block positions. Tables are cited by caption. Equations can be cited but are shown as an image region.
+- [x] Extract text **with positions** using PyMuPDF: every line keeps its page and bounding box. Remove running headers, footers and page numbers by detecting text that repeats on most pages. Join hyphenated line breaks.
+- [x] Split into **passages**, normally one sentence each and never across pages, numbered per paper (`P3-S12`, or an ordinal). Each passage keeps its page, its line range and one rectangle per line, which is what the viewer highlights.
+- [x] Detect sections (Abstract, Introduction, Method, Results, Discussion, Limitations, Conclusion, References) from font size and common heading words. The reference list is kept for display but never cited as evidence.
+- [x] Read metadata (title, authors, year, venue, DOI) from the PDF's metadata and its first page. GROBID can improve this and parse references if the simple approach is not good enough.
+- [x] **Scanned PDFs** have no text layer. Detect this (almost no extractable characters) and mark the paper "needs OCR". OCR with positions (Tesseract or a cloud OCR) is a later step.
+- [x] Two-column layouts, tables and equations: read lines in column order using block positions. Tables are cited by caption. Equations can be cited but are shown as an image region.
 - [ ] Unit tests on a small set of open-access PDFs: single and two-column layouts, a scanned page, a paper with a long reference list.
 
 **Step 3: Templates**
 
-- [ ] A built-in **literature review template** with these columns: Paper title, Authors, Year, Problem statement, Research questions, Approach / method, Dataset(s), Metrics, Results, Key findings, Limitations, Conclusion, Future work. Each column has instructions, for example "Metrics: the evaluation measures reported, such as accuracy or F1, with their values if stated".
-- [ ] **User templates:** add, remove, rename and reorder columns. Each column has a label, plain-language instructions, a kind (text, list, number, or a category with fixed options, such as study type: experiment, survey, case study) and whether it is required. Templates belong to the user and can be reused across projects.
-- [ ] More built-in templates later: systematic review (PRISMA-style screening fields), empirical software engineering, clinical study (PICO: population, intervention, comparison, outcome).
-- [ ] Add a column to an existing table, and only that column is extracted.
+- [x] A built-in **literature review template** with these columns: Paper title, Authors, Year, Problem statement, Research questions, Approach / method, Dataset(s), Metrics, Results, Key findings, Limitations, Conclusion, Future work. Each column has instructions, for example "Metrics: the evaluation measures reported, such as accuracy or F1, with their values if stated".
+- [x] **User templates:** add, remove, rename and reorder columns. Each column has a label, plain-language instructions, a kind (text, list, number, or a category with fixed options, such as study type: experiment, survey, case study) and whether it is required. Templates belong to the user and can be reused across projects.
+- [x] More built-in templates later: systematic review (PRISMA-style screening fields), empirical software engineering, clinical study (PICO: population, intervention, comparison, outcome).
+- [x] Add a column to an existing table, and only that column is extracted.
 
 **Step 4: Extraction with citations**
 
-- [ ] For each paper, send the LLM the template's columns and the paper's passages, each with its ID: `[P4-S7] We evaluate on the Defects4J benchmark…`. The structured output is, per column, a value, the passage IDs that support it, a short quote from each, a confidence, or `not_found` with a reason.
-- [ ] **The LLM can only cite passage IDs the app gave it.** Unknown IDs are dropped.
-- [ ] **Citation check (no LLM).** The quote must appear in the cited passage: an exact match after normalising whitespace and hyphenation, or a fuzzy match at or above a threshold for small extraction differences. A number in the value must appear in a cited passage, as in the grounding check. Cells that fail are retried once with the failure explained, then shown as **unverified**.
-- [ ] **Long papers.** Short papers go in one call. For longer ones, embed the passages (reusing the column-retrieval code) and send each column's top passages plus the abstract and conclusion. This also keeps cost bounded.
-- [ ] Metadata columns (title, authors, year) come from the parsed metadata first, and the LLM only when that is missing.
-- [ ] One background job per paper, in parallel within the provider's rate limits, with retries for "busy" errors as for column descriptions. Cells stream into the table as they finish.
-- [ ] Every extraction call is traced in `llm_calls`, with the prompt version, the template version and the cost per paper.
+- [x] For each paper, send the LLM the template's columns and the paper's passages, each with its ID: `[P4-S7] We evaluate on the Defects4J benchmark…`. The structured output is, per column, a value, the passage IDs that support it, a short quote from each, a confidence, or `not_found` with a reason.
+- [x] **The LLM can only cite passage IDs the app gave it.** Unknown IDs are dropped.
+- [x] **Citation check (no LLM).** The quote must appear in the cited passage: an exact match after normalising whitespace and hyphenation, or a fuzzy match at or above a threshold for small extraction differences. A number in the value must appear in a cited passage, as in the grounding check. Cells that fail are retried once with the failure explained, then shown as **unverified**.
+- [x] **Long papers.** Short papers go in one call. For longer ones, embed the passages (reusing the column-retrieval code) and send each column's top passages plus the abstract and conclusion. This also keeps cost bounded.
+- [x] Metadata columns (title, authors, year) come from the parsed metadata first, and the LLM only when that is missing.
+- [x] One background job per paper, in parallel within the provider's rate limits, with retries for "busy" errors as for column descriptions. Cells stream into the table as they finish.
+- [x] Every extraction call is traced in `llm_calls`, with the prompt version, the template version and the cost per paper.
 
 **Step 5: The review table and the reader**
 
-- [ ] **Table view:** one row per paper and one column per template field. Columns can be resized and pinned, the title column stays fixed, rows can be sorted and filtered, and long cells are clamped with "show more". Each status has a visible marker: not found, unverified, edited.
-- [ ] **Citation markers** appear inline, like `[1] [2]`. Hovering shows the quoted sentence and its page. Clicking opens the **reader**.
-- [ ] **Reader:** a side panel with the PDF (PDF.js) opened at the cited page and scrolled to it, with the cited passage's rectangles highlighted. Previous and next buttons step through the cell's citations. The passage text is shown above the PDF, so a citation still works if the PDF cannot render.
-- [ ] **Editing:** change any cell by hand (`source = user`). Your edits are never overwritten when the table is re-run. Accept or reject AI values. Re-run a cell, a column, a paper or the whole table.
-- [ ] **Export:** CSV and Excel with one column per field, plus a "citations" companion column listing paper, page and quote. Markdown table. BibTeX for the papers.
+- [x] **Table view:** one row per paper and one column per template field. Columns can be resized and pinned, the title column stays fixed, rows can be sorted and filtered, and long cells are clamped with "show more". Each status has a visible marker: not found, unverified, edited.
+- [x] **Citation markers** appear inline, like `[1] [2]`. Hovering shows the quoted sentence and its page. Clicking opens the **reader**.
+- [x] **Reader:** a side panel with the PDF (PDF.js) opened at the cited page and scrolled to it, with the cited passage's rectangles highlighted. Previous and next buttons step through the cell's citations. The passage text is shown above the PDF, so a citation still works if the PDF cannot render.
+- [x] **Editing:** change any cell by hand (`source = user`). Your edits are never overwritten when the table is re-run. Accept or reject AI values. Re-run a cell, a column, a paper or the whole table.
+- [x] **Export:** CSV and Excel with one column per field, plus a "citations" companion column listing paper, page and quote. Markdown table. BibTeX for the papers.
 - [ ] Later: ask questions across the papers in chat ("Which papers use Defects4J?"), answered with the same citation mechanism.
 
 **Step 6: Connect to the rest of RQ Lens**
 
-- [ ] Link papers to research questions: for each RQ, the table can be filtered to papers whose problem or findings relate to it, with citations.
-- [ ] The dataset report export (Phase 6) can include the literature table as an appendix.
+- [x] Link papers to research questions: for each RQ, the table can be filtered to papers whose problem or findings relate to it, with citations.
+- [x] The dataset report export (Phase 6) can include the literature table as an appendix.
 
 **Evaluation (benchmark D)**
 
 - [ ] 20 to 30 open-access papers (arXiv, PLOS ONE, PeerJ, ACM open access) of different layouts and fields, versioned like the datasets. Fill the default template **by hand**, with the supporting sentence for each cell.
-- [ ] Metrics:
+- [x] Metrics:
   - **cell accuracy**: whether the value matches the label, judged by a rubric, with an LLM judge checked against hand judgments on a sample;
   - **citation precision**: whether the cited passage supports the value;
   - **citation recall**: whether the labelled supporting sentence is among the citations;
   - **not-found accuracy**: whether the AI says not found when the paper lacks the field;
   - **unverified rate**, and cost and time per paper.
-- [ ] Planted cases: a paper with no limitations section (the expected answer is not found), and a paper whose abstract and results disagree (the citation should point at the results).
-- [ ] Experiments:
+- [x] Planted cases: a paper with no limitations section (the expected answer is not found), and a paper whose abstract and results disagree (the citation should point at the results).
+- [x] Experiments:
   - 7: whole paper versus retrieved passages per column, for accuracy and cost;
   - 8: with versus without the citation check and retry;
   - 9: cheap versus strong model.

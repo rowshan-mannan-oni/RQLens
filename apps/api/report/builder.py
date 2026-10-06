@@ -1,8 +1,9 @@
 """The dataset report: a draft of the "data" section of a paper, as Markdown or PDF.
 
 Sections: overview, datasets, data dictionary, data-quality warnings, research-question fit,
-top insights, and limitations. Every number comes from the stored profile, assessments and
-insights (themselves computed by queries); nothing is generated for the report itself.
+top insights, and limitations, plus the newest literature table as an appendix. Every number
+comes from the stored profile, assessments and insights (themselves computed by queries);
+nothing is generated for the report itself.
 """
 
 import datetime as dt
@@ -17,8 +18,11 @@ from api.db.models import (
     DatasetColumn,
     Insight,
     InsightRun,
+    Paper,
     Project,
     ResearchQuestion,
+    ReviewCell,
+    ReviewTable,
     RQAssessment,
     TableProfile,
 )
@@ -72,6 +76,20 @@ class QuestionSection:
 
 
 @dataclass
+class LiteraturePaper:
+    title: str
+    byline: str  # authors and year
+    fields: list[tuple[str, str, list[int], bool]]  # column, value, cited pages, unverified
+    missing: list[str]  # columns the paper does not state
+
+
+@dataclass
+class LiteratureAppendix:
+    name: str
+    papers: list[LiteraturePaper]
+
+
+@dataclass
 class ReportData:
     title: str
     topic: str | None
@@ -83,6 +101,7 @@ class ReportData:
     insight_run: dict[str, Any] | None
     joins: int = 0
     notes: list[str] = field(default_factory=list)
+    literature: LiteratureAppendix | None = None
 
 
 def _summary(p: dict[str, Any]) -> str:
@@ -242,7 +261,63 @@ async def gather(session: AsyncSession, project: Project) -> ReportData:
         insights=insights,
         data_quality=data_quality,
         insight_run={"planned": run.planned, "created_at": run.created_at} if run else None,
+        literature=await _literature(session, project.id),
     )
+
+
+def _value_text(value: Any) -> str:
+    if isinstance(value, list):
+        return "; ".join(str(v) for v in value)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return "" if value is None else str(value)
+
+
+async def _literature(session: AsyncSession, project_id: int) -> LiteratureAppendix | None:
+    """The newest literature table, one entry per paper. Metadata columns (title, authors,
+    year) form the heading; rejected values are left out."""
+    table = await session.scalar(
+        select(ReviewTable)
+        .where(ReviewTable.project_id == project_id)
+        .order_by(ReviewTable.id.desc())
+        .limit(1)
+    )
+    if table is None:
+        return None
+    columns = [
+        c for c in table.columns_json if c.get("metadata") not in ("title", "authors", "year")
+    ]
+    cells = {
+        (c.paper_id, c.column_key): c
+        for c in await session.scalars(select(ReviewCell).where(ReviewCell.table_id == table.id))
+    }
+    papers = []
+    for p in await session.scalars(
+        select(Paper)
+        .where(Paper.project_id == project_id, Paper.status == "ready")
+        .order_by(Paper.year.nulls_last(), Paper.title, Paper.filename)
+    ):
+        authors = list(p.authors_json or [])
+        who = (authors[0] + (" et al." if len(authors) > 2 else f" and {authors[1]}"
+               if len(authors) == 2 else "")) if authors else ""  # fmt: skip
+        byline = ", ".join(x for x in (who, str(p.year) if p.year else "") if x)
+        fields, missing = [], []
+        for col in columns:
+            cell = cells.get((p.id, col["key"]))
+            if cell is None or cell.review == "rejected":
+                continue
+            if cell.status == "not_found":
+                missing.append(col["label"])
+                continue
+            if cell.status not in ("done", "unverified"):
+                continue
+            text = _value_text(cell.value_json)
+            if not text:
+                continue
+            pages = sorted({c["page"] for c in (cell.citations_json or []) if c.get("page")})
+            fields.append((col["label"], text, pages, cell.status == "unverified"))
+        papers.append(LiteraturePaper(p.title or p.filename, byline, fields, missing))
+    return LiteratureAppendix(table.name, papers) if papers else None
 
 
 # ---- Markdown ---------------------------------------------------------------------------
@@ -394,4 +469,27 @@ def render_markdown(r: ReportData) -> str:
         "unless stated.",
         "",
     ]
+    if r.literature:
+        out += _render_literature(r.literature)
     return "\n".join(out)
+
+
+def _render_literature(lit: LiteratureAppendix) -> list[str]:
+    out = [f"## Appendix A. Literature: {_cell(lit.name)}", ""]
+    out += [
+        "Values were extracted from each paper by AI and cite the sentences they came from; "
+        "page numbers refer to the paper's PDF. Citations were checked against the paper "
+        "text, and values marked *unverified* failed that check. Values you edited appear as "
+        "you wrote them.",
+        "",
+    ]
+    for p in lit.papers:
+        out += [f"### {_cell(p.title)}" + (f" ({_cell(p.byline)})" if p.byline else ""), ""]
+        for label, text, pages, unverified in p.fields:
+            where = f" (p. {', '.join(str(n) for n in pages)})" if pages else ""
+            flag = " *unverified*" if unverified else ""
+            out.append(f"- **{_cell(label)}:** {_cell(text)}{where}{flag}")
+        if p.missing:
+            out.append(f"- *Not stated:* {', '.join(_cell(m) for m in p.missing)}")
+        out.append("")
+    return out

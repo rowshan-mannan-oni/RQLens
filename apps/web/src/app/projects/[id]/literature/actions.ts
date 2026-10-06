@@ -8,6 +8,7 @@ import type { ActionState } from "@/components/confirm-dialog";
 import { ApiError, apiFetch } from "@/lib/api";
 import type {
   CellValue,
+  RelatedPapers,
   ReviewTable,
   ReviewTemplate,
   TemplateColumn,
@@ -250,6 +251,23 @@ export async function rerun(
     { method: "POST", body: JSON.stringify(scope) },
     `${base(projectId)}/${tableId}`,
   );
+}
+
+export async function relatedPapers(
+  projectId: number,
+  tableId: number,
+  rqId: number,
+): Promise<{ error: string | null; data?: RelatedPapers }> {
+  await requireUser();
+  try {
+    const data = await apiFetch<RelatedPapers>(
+      `/projects/${projectId}/review-tables/${tableId}/related?rq_id=${rqId}`,
+    );
+    return { error: null, data };
+  } catch (e) {
+    if (e instanceof ApiError) return { error: message(e) };
+    throw e;
+  }
 }
 
 // --- templates -----------------------------------------------------------------------------

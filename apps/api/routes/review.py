@@ -8,9 +8,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 
 from api.auth import CurrentUser
-from api.db.models import Paper, ReviewCell, ReviewTable, ReviewTemplate
+from api.db.models import Paper, ResearchQuestion, ReviewCell, ReviewTable, ReviewTemplate
 from api.review import export
 from api.review.jobs import queue_cells, table_columns
+from api.review.related import question_terms, related_papers
 from api.review.templates import (
     BUILTIN,
     DEFAULT_TEMPLATE,
@@ -445,6 +446,40 @@ async def rerun(
     await session.commit()
     await _enqueue(queue, table.id, papers, keys, include_user=single)
     return {"cells": n, "papers": len(papers)}
+
+
+# --- research questions ----------------------------------------------------------------------
+
+
+class RelatedOut(BaseModel):
+    rq_id: int
+    terms: list[str]
+    papers: list[dict[str, Any]]  # paper_id, score, matched_terms, cells
+
+
+@router.get("/{table_id}/related")
+async def related(project: OwnedProject, table_id: int, session: Session, rq_id: int) -> RelatedOut:
+    """Papers whose problem, questions or findings relate to a research question."""
+    table = await get_table(project, table_id, session)
+    rq = await session.get(ResearchQuestion, rq_id)
+    if rq is None or rq.project_id != project.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Research question not found")
+    rq_terms = question_terms(rq.text, rq.parsed_json)
+    papers = await session.execute(
+        select(Paper.id, Paper.title).where(Paper.project_id == project.id, Paper.status == "ready")
+    )
+    cells = list(await session.scalars(select(ReviewCell).where(ReviewCell.table_id == table.id)))
+    columns = {c.key: c.label for c in table_columns(table) if c.metadata is None}
+    found = related_papers(rq_terms, [(p.id, p.title) for p in papers], cells, columns)
+    return RelatedOut(
+        rq_id=rq.id,
+        terms=sorted(rq_terms),
+        papers=[
+            {"paper_id": r.paper_id, "score": r.score, "matched_terms": r.matched_terms,
+             "cells": r.cells}
+            for r in found
+        ],
+    )  # fmt: skip
 
 
 # --- export ----------------------------------------------------------------------------------

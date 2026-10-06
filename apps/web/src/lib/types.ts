@@ -590,3 +590,14 @@ export type ReviewTable = ReviewTableSummary & {
   papers: Paper[];
   cells: ReviewCell[];
 };
+
+export type RelatedPapers = {
+  rq_id: number;
+  terms: string[];
+  papers: {
+    paper_id: number;
+    score: number;
+    matched_terms: string[];
+    cells: { column_key: string; terms: string[] }[];
+  }[];
+};

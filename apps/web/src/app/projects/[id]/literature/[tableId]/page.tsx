@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ReviewTableView } from "@/components/literature/review-table";
 import { ApiError, apiFetch } from "@/lib/api";
-import type { ReviewTable } from "@/lib/types";
+import type { ResearchQuestions, ReviewTable } from "@/lib/types";
 
 export default async function ReviewTablePage(
   props: PageProps<"/projects/[id]/literature/[tableId]">,
@@ -13,10 +13,12 @@ export default async function ReviewTablePage(
   if (!session?.user) redirect("/");
   const { id, tableId } = await props.params;
   let table: ReviewTable;
+  let rqs: ResearchQuestions;
   try {
-    table = await apiFetch<ReviewTable>(
-      `/projects/${id}/review-tables/${tableId}`,
-    );
+    [table, rqs] = await Promise.all([
+      apiFetch<ReviewTable>(`/projects/${id}/review-tables/${tableId}`),
+      apiFetch<ResearchQuestions>(`/projects/${id}/rqs`),
+    ]);
   } catch (e) {
     if (e instanceof ApiError && (e.status === 404 || e.status === 422))
       notFound();
@@ -36,7 +38,11 @@ export default async function ReviewTablePage(
           marginLeft: "calc((100% - min(100vw - 3rem, 110rem)) / 2)",
         }}
       >
-        <ReviewTableView projectId={Number(id)} table={table} />
+        <ReviewTableView
+          projectId={Number(id)}
+          table={table}
+          questions={rqs.questions.map((q) => ({ id: q.id, text: q.text }))}
+        />
       </div>
     </>
   );

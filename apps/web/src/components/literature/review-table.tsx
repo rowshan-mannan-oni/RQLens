@@ -38,6 +38,7 @@ import {
   editCell,
   renameTable,
   reorderColumns,
+  relatedPapers,
   rerun,
   revertCell,
   reviewCell,
@@ -50,6 +51,7 @@ import type {
   Citation,
   ColumnKind,
   Paper,
+  RelatedPapers,
   ReviewCell,
   ReviewTable,
   TemplateColumn,
@@ -136,9 +138,11 @@ const NO_PINS: string[] = [];
 export function ReviewTableView({
   projectId,
   table,
+  questions,
 }: {
   projectId: number;
   table: ReviewTable;
+  questions: { id: number; text: string }[];
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +150,22 @@ export function ReviewTableView({
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 } | null>(null);
   const [open, setOpen] = useState<Open>(null);
+  const [related, setRelated] = useState<RelatedPapers | null>(null);
+  const relatedCells = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const p of related?.papers ?? [])
+      for (const c of p.cells) m.set(`${p.paper_id}:${c.column_key}`, c.terms);
+    return m;
+  }, [related]);
+
+  function chooseQuestion(value: string) {
+    if (!value) return setRelated(null);
+    start(async () => {
+      const res = await relatedPapers(projectId, table.id, Number(value));
+      setError(res.error);
+      setRelated(res.data ?? null);
+    });
+  }
   const [widths, setWidths] = useStored(
     `rqlens:table:${table.id}:widths`,
     NO_WIDTHS,
@@ -189,7 +209,11 @@ export function ReviewTableView({
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const relatedIds = related
+      ? new Set(related.papers.map((r) => r.paper_id))
+      : null;
     let list = table.papers.filter((p) => {
+      if (relatedIds && !relatedIds.has(p.id)) return false;
       const rowCells = table.columns.map((c) => cellOf(p.id, c.key));
       if (
         filter === "attention" &&
@@ -236,7 +260,7 @@ export function ReviewTableView({
     }
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table.papers, table.columns, cells, query, filter, sort]);
+  }, [table.papers, table.columns, cells, query, filter, sort, related]);
 
   const counts = useMemo(() => {
     const c = { done: 0, running: 0, unverified: 0, not_found: 0, failed: 0 };
@@ -293,6 +317,9 @@ export function ReviewTableView({
         counts={counts}
         pending={pending}
         run={run}
+        questions={questions}
+        related={related}
+        onQuestion={chooseQuestion}
       />
       {error && (
         <p
@@ -448,7 +475,12 @@ export function ReviewTableView({
                         c.key in stickyLeft
                           ? "bg-surface sticky z-10 border-r"
                           : ""
-                      }`}
+                      } ${relatedCells.has(`${p.id}:${c.key}`) ? "bg-brand-soft/40" : ""}`}
+                      title={
+                        relatedCells.has(`${p.id}:${c.key}`)
+                          ? `Matches: ${relatedCells.get(`${p.id}:${c.key}`)?.join(", ")}`
+                          : undefined
+                      }
                       style={{
                         width: widthOf(c.key),
                         minWidth: widthOf(c.key),
@@ -540,9 +572,15 @@ function Toolbar({
   counts,
   pending,
   run,
+  questions,
+  related,
+  onQuestion,
 }: {
   projectId: number;
   table: ReviewTable;
+  questions: { id: number; text: string }[];
+  related: RelatedPapers | null;
+  onQuestion: (value: string) => void;
   query: string;
   setQuery: (q: string) => void;
   filter: Filter;
@@ -652,6 +690,22 @@ function Toolbar({
           <option value="not_found">With &ldquo;not found&rdquo;</option>
           <option value="edited">Edited by you</option>
         </select>
+        {questions.length > 0 && (
+          <select
+            className="input w-auto max-w-xs py-1.5"
+            value={related?.rq_id ?? ""}
+            onChange={(e) => onQuestion(e.target.value)}
+            aria-label="Papers related to a research question"
+          >
+            <option value="">Any research question</option>
+            {questions.map((q, i) => (
+              <option key={q.id} value={q.id}>
+                RQ{i + 1}:{" "}
+                {q.text.length > 70 ? `${q.text.slice(0, 70)}\u2026` : q.text}
+              </option>
+            ))}
+          </select>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -707,6 +761,16 @@ function Toolbar({
           </button>
         </div>
       </div>
+      {related && (
+        <p className="text-muted text-xs">
+          {related.papers.length === 1
+            ? "1 paper shares"
+            : `${related.papers.length} papers share`}{" "}
+          the question&rsquo;s terms ({related.terms.join(", ")}) in their
+          problem, questions or findings. Matching cells are shaded; their
+          citations show the sentences.
+        </p>
+      )}
     </div>
   );
 }

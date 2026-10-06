@@ -90,6 +90,15 @@ class Extraction:
     passages_sent: int = 0
     retried: list[str] = field(default_factory=list)  # column keys sent back once
     llm_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: float = 0.0
+
+    def count(self, reply: Any) -> None:
+        self.llm_calls += 1
+        self.input_tokens += int(getattr(reply, "input_tokens", 0) or 0)
+        self.output_tokens += int(getattr(reply, "output_tokens", 0) or 0)
+        self.cost_usd += float(getattr(reply, "cost_usd", 0) or 0)
 
 
 async def extract(
@@ -128,7 +137,7 @@ async def extract(
             {"role": "user", "content": _user_message(ask, sent, paper)},
         ]
         reply = await _call(client, messages, project_id)
-        out.llm_calls += 1
+        out.count(reply)
         answers = {a.column: a for a in reply.parsed.cells} if reply.parsed else {}
         checked = {c.key: _judge(c, answers.get(c.key), by_label, check) for c in ask}
 
@@ -143,7 +152,7 @@ async def extract(
             ]
             try:
                 again = await _call(client, retry_messages, project_id)
-                out.llm_calls += 1
+                out.count(again)
                 second = {a.column: a for a in again.parsed.cells} if again.parsed else {}
                 for c in failing:
                     if c.key in second:
