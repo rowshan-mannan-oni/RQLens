@@ -1,6 +1,6 @@
 # RQ Lens: progress checklist
 
-Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06.
+Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (after merging main's chat agent).
 
 Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not started
 
@@ -8,12 +8,12 @@ Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not sta
 
 | Phase | Status |
 |---|---|
-| 0. Setup | Done, except collecting the development datasets |
-| 1. Ingestion and profiling | Done |
-| 2. Semantic layer and chat | Part 1 done (semantic layer, SQL guard); chat agent not started |
+| 0. Setup | Done |
+| 1. Ingestion and profiling | Done; all development datasets load and profile |
+| 2. Semantic layer and chat | Built and tested; waiting on a first run with a real model against the 31 questions |
 | 3. RQ fit analysis | Not started |
 | 4. Insights | Not started |
-| 5. Evaluation | Not started |
+| 5. Evaluation | Harness and first 31 chat questions in place; benchmarks not run |
 | 6. Export, polish, deployment | Project deletion done early; rest not started |
 
 Extra features added on request (not in the plan): multi-file upload, compare and combine datasets, delete with confirmation.
@@ -26,8 +26,8 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 - [~] Ruff, mypy (strict), pytest, ESLint, Prettier, pre-commit, CI workflow. All configured and passing locally; the CI workflow has never run because the repository has no remote yet, and the pre-commit hooks are not installed (`pre-commit install`).
 - [x] Alembic with migrations (5 so far).
 - [~] OAuth login and a protected projects page. Google login works; GitHub login code is in place but no GitHub OAuth app has been created.
-- [~] `LLMClient` with retries, timeouts, structured output, cost calculation and trace logging. Done; calls that fail with an exception are not yet written to `llm_calls`.
-- [ ] Collect 8 to 10 public datasets of different shapes for development and evaluation.
+- [x] `LLMClient` with retries, timeouts, structured output, tool calls, embeddings, cost calculation and trace logging. Failed calls are logged too, with the error in `response_json`.
+- [x] Collect 8 to 10 public datasets of different shapes: 8 public datasets plus one messy export derived from one of them, versioned under `evals/datasets/` with sources, licences and checksums in `manifest.json`. Shapes: survey (cps1985, penguins), software repository (ant_defects, PROMISE), time series (flights), timestamps (taxis), wide table (ames, 75 columns), leakage and missingness (titanic, mpg), messy export (messy_survey: semicolons, Latin-1, accented headers, `N/A` and `-999`).
 
 **Done when:** a logged-in user can create a project and one traced LLM call appears in `llm_calls`. ✅ Met.
 
@@ -37,7 +37,7 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 - [x] Upload endpoint with a 500 MB size limit, saved to disk under a generated file name.
 - [x] Load with DuckDB `read_csv` auto-detection: delimiter, header, quoted newlines; rows that fail to parse are recorded and reported; non-UTF-8 files fall back to Latin-1.
-- [x] Sanitise table and column names; keep the original names for display.
+- [x] Sanitise table and column names; keep the original names for display. Accented letters keep their base letter (`Âge` → `age`; it used to become `ge`).
 - [x] Several files per project as separate tables (with multi-file upload).
 - [~] Fix mis-typed columns. Numbers and dates stored as text are re-typed; placeholder strings (`N/A`, `?`, `.`, `-` …) become missing. Numeric codes such as `-999` are **flagged, not replaced**, because they cannot be told apart from real values without the data dictionary.
 
@@ -66,7 +66,7 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 - [x] Profile page: summary tiles, sortable column list, per-column detail with charts, warnings panel, associations, missing-data patterns.
 - [x] Progress indicator while background jobs run.
 
-**Done when:** all development datasets load and profile correctly, and the profiler has unit tests against hand-checked fixtures. ⚠️ Partly met: the hand-checked tests exist and pass; the development datasets have not been collected yet (Phase 0).
+**Done when:** all development datasets load and profile correctly, and the profiler has unit tests against hand-checked fixtures. ✅ Met: all 9 datasets load and profile (largest, ames, in about 2.5 s), and the profiler warnings are plausible (for example, titanic's `survived`/`alive` leakage, ames imbalance, and the messy file's `-999` codes and Latin-1 fallback).
 
 ## Phase 2: Semantic layer and chat
 
@@ -77,7 +77,7 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 - [x] Data dictionary upload (CSV), preferred over AI descriptions.
 - [x] User edits of descriptions, which take priority over everything else.
 - [x] Per-project switch to stop sending sample values to the LLM (plan section 9).
-- [ ] Column retrieval (embeddings) for wide tables of more than about 50 columns.
+- [x] Column retrieval for wide tables (more than 50 columns), in `semantic/column_retrieval.py`. Columns are ranked by embedding similarity plus word overlap (with stop words removed), and embeddings are cached in memory. The best 15 columns for the question go into the prompt, and `search_columns` uses the same ranking. If embeddings are unavailable, ranking falls back to word overlap alone. Not yet tried against a real embedding API.
 
 **SQL guard and executor**
 
@@ -88,19 +88,25 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 **Chat agent**
 
-- [ ] Bounded tool loop with streaming output.
-- [ ] Tools: `get_schema`, `get_column_profile`, `search_columns`, `run_sql`, `run_stat_test`, `make_chart`, `final_answer`.
-- [ ] Self-correction: return SQL errors to the model, up to 3 retries.
-- [ ] Limits: tool calls, token budget, wall-clock time per question.
-- [ ] Grounding check: every number in an answer must appear in a tool result.
-- [ ] Clarifying questions for ambiguous requests.
-- [ ] Chat UI with answer, chart and a "How this was computed" panel.
+- [x] Bounded tool loop with streaming output (server-sent events).
+- [x] Tools: `get_schema`, `get_column_profile`, `search_columns`, `run_sql`, `run_stat_test`, `make_chart`, `final_answer`.
+- [x] Self-correction: SQL errors are returned to the model; the question stops after 3 failed queries.
+- [x] Limits: tool calls, failed queries, tokens and time per question. When a limit is hit, the model gets one final turn to answer.
+- [x] Grounding check: every number in an answer must appear in a tool result. An answer that fails is sent back once, then flagged. Scientific notation is now handled: `p = 6.6e-54` used to be read as `54` and rejected, and `1.2E-5` was not checked at all.
+- [x] Clarifying questions for ambiguous requests (`final_answer` with kind `clarification`).
+- [x] Chat UI with answer, chart and a "How this was computed" panel.
 
 **Evaluation set**
 
-- [ ] First 30 question and gold-SQL pairs.
+- [~] First 30 question and gold-SQL pairs: 31 cases in `evals/qa/questions.v1.jsonl`, covering aggregates, filters, group-by, percentages, time, statistical tests, a join, a wide table, the messy file, one ambiguous and one unanswerable question. The gold results are in `gold.v1.json`. **None has been checked by hand yet** (`reviewed: false`); plan section 13 requires that.
 
-**Done when:** the agent answers the first 30 questions, all SQL guard tests pass (including malicious inputs), and every answer shows its queries. ⚠️ Partly met: the SQL guard tests pass (31 malicious inputs blocked); the agent does not exist yet.
+**Done when:** the agent answers the first 30 questions, all SQL guard tests pass (including malicious inputs), and every answer shows its queries. ⚠️ Partly met:
+
+- The SQL guard tests pass.
+- Every answer stores and shows its queries.
+- The harness passes all 31 cases with a scripted stand-in model (`--llm oracle`).
+- A full chat ran end to end through the real API, worker, Postgres and Redis against a scripted model server.
+- **Not yet run with a real model**, because no API key was available. Run: `PYTHONPATH=apps:. python evals/run_eval.py qa`.
 
 ## Phase 3: RQ fit analysis
 
@@ -123,10 +129,10 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 ## Phase 5: Evaluation
 
-- [ ] A. Chat accuracy: 120 to 150 questions with gold SQL across 8 datasets; execution-match scoring.
+- [~] A. Chat accuracy: 120 to 150 questions with gold SQL across 8 datasets; execution-match scoring. Scoring and the runner (`evals/run_eval.py`, `evals/scoring.py`) are done and unit-tested; there are 31 of the 120 to 150 questions.
 - [ ] B. Planted-issue detection: injector scripts, at least 100 cases, false alarms on clean data. (The profiler already has planted-issue unit tests to build on.)
 - [ ] C. RQ verdict agreement: 60 hand-labelled dataset and RQ pairs, second labeller on 20.
-- [ ] Experiments 1 to 6, LLM response cache, bootstrap confidence intervals.
+- [ ] Experiments 1 to 6, LLM response cache, bootstrap confidence intervals. (`run_eval.py --no-retrieval` covers experiment 6's switch.)
 - [ ] CI smoke eval (15 questions per pull request).
 - [ ] Error analysis of 30 failures.
 
@@ -153,17 +159,19 @@ Extra features added on request (not in the plan): multi-file upload, compare an
 
 | Level | Status |
 |---|---|
-| Unit | ✅ 91 tests: loader, profiler, statistics against hand calculations and scipy, SQL guard, PII and masking, dictionary, describer, combine and compare |
-| Integration | ⚠️ Checked with manual end-to-end scripts only; no automated tests against a real database yet |
+| Unit | ✅ 160 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg |
+| Integration | ⚠️ The oracle eval test runs the real loader, profiler, agent loop, guard and executor on real datasets. The full API (Postgres, Redis, worker, streaming chat) was checked with a manual script, not an automated test |
 | Security | ⚠️ Malicious SQL tested; prompt injection through column names and cell values, and oversized uploads, not yet tested |
 | End to end (Playwright) | ❌ Not started |
-| Eval | ❌ Not started |
+| Eval | ⚠️ Harness ready and self-tested; no real-model run yet |
 
 ## Known gaps and follow-ups
 
-- Failed LLM calls (exceptions) are not logged in `llm_calls`; needed before the chat agent's cost and retry metrics.
 - The Gemini free tier often answers 429 or 503; description jobs retry automatically (after 30, 60 and 90 s).
 - The CI workflow has never run (no remote); pre-commit hooks are not installed.
 - Uploads are spooled to a temporary file by the multipart parser before the size check.
 - `DECISIONS.md` (one line per design choice, suggested in plan section 13) has not been started.
 - The development database contains test data under `smoke@example.com`.
+- The 31 gold answers need checking by hand before any accuracy number is reported.
+- The CI smoke eval (15 questions, `run_eval.py --smoke`) needs an `LLM_API_KEY` secret in GitHub before it can run in CI.
+- In ames, `Mas_Vnr_Type` shows 61% missing because the value `None` (meaning no veneer) is treated as a missing-value placeholder. This affects real categories that happen to be spelled `None`.

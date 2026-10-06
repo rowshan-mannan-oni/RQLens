@@ -7,7 +7,7 @@ when the browser disconnects mid-stream.
 import asyncio
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from datetime import datetime
 from typing import Any
 
@@ -25,6 +25,7 @@ from api.db.session import get_sessionmaker
 from api.llm.client import LLMClient
 from api.routes.deps import OwnedProject, Queue, Session
 from api.routes.query import execute_logged
+from api.semantic.column_retrieval import ColumnRetriever
 from api.sql.executor import QueryResult
 
 router = APIRouter(prefix="/projects/{project_id}/chats", tags=["chat"])
@@ -189,10 +190,18 @@ async def _answer(
             except HTTPException as exc:
                 raise ToolError(str(exc.detail)) from exc
 
-        box = ToolBox(ctx, execute)
+        client = LLMClient.from_settings()
+        retriever = None
+        if client.embedding_model:
+
+            async def embed(texts: Sequence[str]) -> list[list[float]]:
+                return await client.embed(texts, step="column_retrieval", project_id=ctx.project_id)
+
+            retriever = ColumnRetriever(embed)
+        box = ToolBox(ctx, execute, retriever)
         outcome: Outcome | None = None
         try:
-            async for event in run_agent(LLMClient.from_settings(), box, question, history):
+            async for event in run_agent(client, box, question, history):
                 if event["type"] == "done":
                     outcome = event["outcome"]
                 else:

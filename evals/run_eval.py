@@ -20,6 +20,7 @@ import time
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 from itertools import count
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ from api.agent.loop import PROMPT_VERSION, Limits, Outcome, run_agent
 from api.agent.tools import ProjectContext, ToolBox
 from api.llm.client import LLMClient
 from api.llm.tracing import null_tracer
+from api.semantic.column_retrieval import ColumnRetriever
 from api.sql.executor import ROW_LIMIT, QueryResult, run_query
 from api.stats.library import run_test
 from evals import local_project
@@ -85,7 +87,12 @@ def check_gold(db: Path, cases: list[dict[str, Any]]) -> None:
 
 
 async def run_case(
-    client: Any, db: Path, ctx: ProjectContext, case: dict[str, Any], limits: Limits
+    client: Any,
+    db: Path,
+    ctx: ProjectContext,
+    case: dict[str, Any],
+    limits: Limits,
+    retriever: ColumnRetriever | None = None,
 ) -> dict[str, Any]:
     tables = case["tables"]
     ids = count(1)
@@ -94,7 +101,7 @@ async def run_case(
         r = await asyncio.to_thread(run_query, db, sql, tables, row_limit=row_limit)
         return next(ids), r
 
-    box = ToolBox(local_project.subset(ctx, tables), execute)
+    box = ToolBox(local_project.subset(ctx, tables), execute, retriever)
     if isinstance(client, OracleClient):
         client.case = case
     outcome: Outcome | None = None
@@ -203,6 +210,9 @@ async def main() -> int:
     parser.add_argument("--model", default=None, help="override LLM_MODEL")
     parser.add_argument("--ids", nargs="*")
     parser.add_argument("--smoke", action="store_true")
+    parser.add_argument(
+        "--no-retrieval", action="store_true", help="word matching only (experiment 6)"
+    )
     args = parser.parse_args()
 
     cases = load_cases(args.ids, args.smoke)
@@ -216,12 +226,15 @@ async def main() -> int:
             return 0
 
         client: Any
+        retriever = None
         if args.llm == "oracle":
             client = OracleClient()
         else:
             client = LLMClient.from_settings(tracer=null_tracer)
             if args.model:
                 client.model = args.model
+            if client.embedding_model and not args.no_retrieval:
+                retriever = ColumnRetriever(partial(client.embed, step="column_retrieval"))
         limits = Limits()
         meta = {
             "started": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
@@ -229,11 +242,12 @@ async def main() -> int:
             "model": client.model,
             "git_sha": git_sha(),
             "limits": vars(limits),
+            "retrieval": "embeddings" if retriever else "words",
         }
         results = []
         for case in cases:
             t0 = time.perf_counter()
-            r = await run_case(client, db, ctx, case, limits)
+            r = await run_case(client, db, ctx, case, limits, retriever)
             results.append(r)
             mark = "PASS" if r["passed"] else "FAIL"
             print(f"{mark} {case['id']:18} {time.perf_counter() - t0:5.1f}s {r['reason']}")
