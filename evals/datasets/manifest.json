@@ -1,0 +1,110 @@
+[
+  {
+    "name": "penguins",
+    "version": "v1",
+    "file": "penguins/v1/penguins.csv",
+    "source": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/penguins.csv",
+    "license": "CC0 (palmerpenguins, Horst, Hill and Gorman 2020)",
+    "description": "Palmer penguins: body measurements of three species. Survey-style biology data with missing values.",
+    "rows": 344,
+    "columns": 7,
+    "bytes": 13478,
+    "sha256": "e07636bd8af74260099ea2f8678e2eabbf35def579940cc76f67061ee16c06c1"
+  },
+  {
+    "name": "titanic",
+    "version": "v1",
+    "file": "titanic/v1/titanic.csv",
+    "source": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/titanic.csv",
+    "license": "Public domain (seaborn-data)",
+    "description": "Titanic passengers. Redundant columns (alive duplicates survived, class duplicates pclass) make it a label-leakage case.",
+    "rows": 891,
+    "columns": 15,
+    "bytes": 57018,
+    "sha256": "81787d320d7f7b03df935e91de8bd19e11d45c5bbcab86ef4d4a76dc91b7d4f2"
+  },
+  {
+    "name": "taxis",
+    "version": "v1",
+    "file": "taxis/v1/taxis.csv",
+    "source": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/taxis.csv",
+    "license": "NYC TLC open data via seaborn-data",
+    "description": "NYC taxi trips in March 2019 with timestamps, fares and zones.",
+    "rows": 6433,
+    "columns": 14,
+    "bytes": 869349,
+    "sha256": "08d6d71784dbaa2651fee37fc03389754194c05d72d2d19cbc2c799dea6ac09d"
+  },
+  {
+    "name": "flights",
+    "version": "v1",
+    "file": "flights/v1/flights.csv",
+    "source": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/flights.csv",
+    "license": "Public domain (seaborn-data)",
+    "description": "Monthly airline passengers 1949-1960 (Box and Jenkins). Time series.",
+    "rows": 144,
+    "columns": 3,
+    "bytes": 2350,
+    "sha256": "237d834127d9c6355630d8f443a7a2377b5925923010009b59809ba0b67f4fac"
+  },
+  {
+    "name": "mpg",
+    "version": "v1",
+    "file": "mpg/v1/mpg.csv",
+    "source": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv",
+    "license": "UCI Machine Learning Repository (CC BY 4.0) via seaborn-data",
+    "description": "Auto MPG: fuel economy of 398 cars, 1970-1982, with missing horsepower.",
+    "rows": 398,
+    "columns": 9,
+    "bytes": 21222,
+    "sha256": "c14b8b855ea7ee86cb9736bf8caaf281c4685ca08826f3eb2acaccaaf40f0d5a"
+  },
+  {
+    "name": "cps1985",
+    "version": "v1",
+    "file": "cps1985/v1/cps1985.csv",
+    "source": "https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/AER/CPS1985.csv",
+    "license": "AER R package (GPL-2/3) via Rdatasets",
+    "description": "Current Population Survey 1985: wages and characteristics of 534 workers. Survey data.",
+    "rows": 534,
+    "columns": 12,
+    "bytes": 30478,
+    "sha256": "1b4bf681b94ecb82e534a0f97773c704205e13ccf13d273e439e44eaa9f5435c"
+  },
+  {
+    "name": "ames",
+    "version": "v1",
+    "file": "ames/v1/ames.csv",
+    "source": "https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/modeldata/ames.csv",
+    "license": "modeldata R package (MIT) via Rdatasets; De Cock (2011)",
+    "description": "Ames, Iowa house sales 2006-2010. Wide table (74 columns).",
+    "rows": 2930,
+    "columns": 75,
+    "bytes": 1284472,
+    "sha256": "500eea48e9175223a10ac7ccbc4d57b79693d4a1132628b6269c7c781e974141"
+  },
+  {
+    "name": "ant_defects",
+    "version": "v1",
+    "file": "ant_defects/v1/ant_defects.csv",
+    "source": "https://raw.githubusercontent.com/feiwww/PROMISE-backup/master/bug-data/ant/ant-1.7.csv",
+    "license": "PROMISE repository (public research data)",
+    "description": "Apache Ant 1.7 classes: CK object-oriented metrics and bug counts (PROMISE defect data). Software repository data.",
+    "rows": 745,
+    "columns": 22,
+    "bytes": 92588,
+    "sha256": "073f0aaace855d0beb739f6897313d15d68ac11b3057d226b2b4209566ee0a2c"
+  },
+  {
+    "name": "messy_survey",
+    "version": "v1",
+    "file": "messy_survey/v1/messy_survey.csv",
+    "source": "derived: python evals/datasets/make_messy.py from cps1985/v1",
+    "license": "As cps1985",
+    "description": "Messy spreadsheet export of cps1985: semicolons, Latin-1, accented headers, N/A and -999 placeholders.",
+    "rows": 534,
+    "columns": 12,
+    "bytes": 31035,
+    "sha256": "fc6684a65db99c971197a85e9ac6b7b6fca9b8d43e4757ada184d062bc72e164"
+  }
+]

@@ -60,8 +60,10 @@ class LLMClient:
         prices: Mapping[str, tuple[float, float]] | None = None,
         tracer: Tracer = db_tracer,
         http_client: httpx2.AsyncClient | None = None,
+        embedding_model: str = "",
     ) -> None:
         self.model = model
+        self.embedding_model = embedding_model
         self._prices = prices or {}
         self._tracer = tracer
         self._client = AsyncOpenAI(
@@ -83,6 +85,7 @@ class LLMClient:
             max_retries=s.llm_max_retries,
             prices=s.llm_prices,
             tracer=tracer,
+            embedding_model=s.llm_embedding_model,
         )
 
     async def complete(
@@ -171,6 +174,48 @@ class LLMClient:
             tool_calls=tool_calls,
             message=choice.model_dump(mode="json", exclude_none=True) if choice else None,
         )
+
+    async def embed(
+        self,
+        texts: Sequence[str],
+        *,
+        step: str,
+        project_id: int | None = None,
+        eval_run_id: int | None = None,
+    ) -> list[list[float]]:
+        """Embedding vectors for `texts`, in order. Traced like completions (texts not stored)."""
+        if not self.embedding_model:
+            raise ValueError("No embedding model is configured (LLM_EMBEDDING_MODEL).")
+        started = time.perf_counter()
+
+        async def trace(input_tokens: int, response: Any) -> None:
+            await self._tracer(
+                TraceRecord(
+                    step=step,
+                    model=self.embedding_model,
+                    prompt_version=None,
+                    project_id=project_id,
+                    eval_run_id=eval_run_id,
+                    input_tokens=input_tokens,
+                    output_tokens=0,
+                    cost_usd=cost_usd(self._prices, self.embedding_model, input_tokens, 0),
+                    latency_ms=round((time.perf_counter() - started) * 1000),
+                    request_json={"model": self.embedding_model, "inputs": len(texts)},
+                    response_json=response,
+                )
+            )
+
+        try:
+            response = await self._client.embeddings.create(
+                model=self.embedding_model, input=list(texts)
+            )
+        except Exception as exc:
+            await trace(0, {"error": f"{type(exc).__name__}: {exc}"})
+            raise
+        tokens = response.usage.prompt_tokens if response.usage else 0
+        await trace(tokens, {"vectors": len(response.data)})
+        ordered = sorted(response.data, key=lambda d: d.index)
+        return [list(d.embedding) for d in ordered]
 
     async def complete_structured[T: BaseModel](
         self,

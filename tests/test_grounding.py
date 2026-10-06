@@ -43,6 +43,9 @@ def test_sentence_end_period_is_not_a_decimal() -> None:
         ("p < 0.001", [0.00002]),
         ("It fell by 3.5 points.", [-3.48]),
         ("Values reached 2024.", ["2024-01-01"]),
+        ("p = 6.6e-54", [6.64805e-54]),
+        ("p = 6.6 \u00d7 10^-54", [6.64805e-54]),
+        ("p = 1.2E-5", [0.0000123]),
     ],
 )
 def test_supported(answer: str, pool: list[object]) -> None:
@@ -57,6 +60,9 @@ def test_supported(answer: str, pool: list[object]) -> None:
         ("45% are women.", [0.47]),
         ("p < 0.001", [0.04]),
         ("There are 1,205 rows.", [1204]),
+        # Regression: the exponent used to be read as a separate number (or skipped).
+        ("p = 7.1e-54", [6.64805e-54]),
+        ("p = 1.2E-5", [0.00002]),
     ],
 )
 def test_unsupported(answer: str, pool: list[object]) -> None:

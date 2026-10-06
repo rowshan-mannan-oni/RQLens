@@ -3,7 +3,8 @@
 Numbers are taken from the answer text (code spans, dates and identifiers like `Q3` or
 `col_2` are skipped) and matched against every number the model saw in tool results or the
 question, allowing for rounding to the precision written: "12.3" matches 12.34, "45%" matches
-0.4512 or 45.12, "1.2 million" matches 1,234,567, and a bound such as "p < 0.001" matches any
+0.4512 or 45.12, "1.2 million" matches 1,234,567, "6.6e-54" or "6.6 x 10^-54" matches
+6.648e-54, and a bound such as "p < 0.001" matches any
 value on the right side of it. Whole numbers from 0 to 10 are exempt
 because they usually count things in the sentence ("the top 3 groups").
 """
@@ -21,6 +22,8 @@ CODE = re.compile(r"`[^`]*`")
 DATE = re.compile(r"\b\d{4}-\d{2}(-\d{2})?([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?\b")
 NUMBER = re.compile(
     r"(?:(?P<op>[<>≤≥])=?\s*)?(?<![\w.])(?P<sign>-)?(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
+    # Scientific notation: 1.2e-5, 1.2E-5, 1.2 x 10^-5 (also with a multiplication sign)
+    r"(?:[eE](?P<exp>[-+]?\d+)|\s?[\u00d7x*]\s?10\^?(?P<exp10>[-\u2212+]?\d+))?"
     r"(?P<pct>\s?%)?"
     r"(?:\s?(?P<scale>thousand|million|billion|[kKMB])\b)?"
     r"(?![\w.]*[A-Za-z_])"
@@ -57,6 +60,9 @@ def extract_claims(text: str) -> list[Claim]:
         value = float(raw)
         decimals = len(raw.split(".")[1]) if "." in raw else 0
         scale = SCALES.get(m.group("scale") or "", 1.0)
+        exponent = m.group("exp") or m.group("exp10")
+        if exponent:
+            scale *= 10.0 ** int(exponent.replace("\u2212", "-"))
         percent = m.group("pct") is not None
         exempt = not m.group("op") and decimals == 0 and value <= EXEMPT_MAX
         if exempt and not percent and scale == 1.0:

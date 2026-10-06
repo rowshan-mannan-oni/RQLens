@@ -1,0 +1,519 @@
+{
+ "penguins-01": {
+  "columns": [
+   "n"
+  ],
+  "rows": [
+   [
+    344
+   ]
+  ],
+  "row_count": 1
+ },
+ "penguins-02": {
+  "columns": [
+   "avg_body_mass_g"
+  ],
+  "rows": [
+   [
+    5076.016260162602
+   ]
+  ],
+  "row_count": 1
+ },
+ "penguins-03": {
+  "columns": [
+   "species",
+   "island",
+   "n"
+  ],
+  "rows": [
+   [
+    "Adelie",
+    "Biscoe",
+    44
+   ],
+   [
+    "Chinstrap",
+    "Dream",
+    68
+   ],
+   [
+    "Adelie",
+    "Torgersen",
+    52
+   ],
+   [
+    "Adelie",
+    "Dream",
+    56
+   ],
+   [
+    "Gentoo",
+    "Biscoe",
+    124
+   ]
+  ],
+  "row_count": 5
+ },
+ "penguins-04": {
+  "columns": [
+   "pct_missing_sex"
+  ],
+  "rows": [
+   [
+    3.197674418604651
+   ]
+  ],
+  "row_count": 1
+ },
+ "penguins-05": {
+  "columns": [
+   "x",
+   "y"
+  ],
+  "rows": [],
+  "row_count": 344,
+  "stat": {
+   "test": "kruskal_wallis",
+   "statistic_name": "H",
+   "statistic": 244.891,
+   "p_value": 6.64805e-54,
+   "effect_size_name": "epsilon_squared",
+   "effect_size": 0.718154,
+   "n": 342,
+   "groups": [
+    {
+     "group": "Adelie",
+     "n": 151,
+     "median": 190.0,
+     "mean": 189.954
+    },
+    {
+     "group": "Chinstrap",
+     "n": 68,
+     "median": 196.0,
+     "mean": 195.824
+    },
+    {
+     "group": "Gentoo",
+     "n": 123,
+     "median": 216.0,
+     "mean": 217.187
+    }
+   ],
+   "note": ""
+  }
+ },
+ "titanic-01": {
+  "columns": [
+   "pclass",
+   "survival_pct"
+  ],
+  "rows": [
+   [
+    1,
+    62.96296296296296
+   ],
+   [
+    2,
+    47.28260869565217
+   ],
+   [
+    3,
+    24.236252545824847
+   ]
+  ],
+  "row_count": 3
+ },
+ "titanic-02": {
+  "columns": [
+   "median_fare"
+  ],
+  "rows": [
+   [
+    13.0
+   ]
+  ],
+  "row_count": 1
+ },
+ "titanic-03": {
+  "columns": [
+   "survived",
+   "avg_age"
+  ],
+  "rows": [
+   [
+    0,
+    30.62617924528302
+   ],
+   [
+    1,
+    28.343689655172415
+   ]
+  ],
+  "row_count": 2
+ },
+ "titanic-04": {
+  "columns": [
+   "x",
+   "y"
+  ],
+  "rows": [],
+  "row_count": 891,
+  "stat": {
+   "test": "chi_square",
+   "statistic_name": "chi2 (dof=1)",
+   "statistic": 263.051,
+   "p_value": 3.71175e-59,
+   "effect_size_name": "cramers_v",
+   "effect_size": 0.543351,
+   "n": 891,
+   "groups": [],
+   "note": ""
+  }
+ },
+ "titanic-05": {
+  "columns": [
+   "n_missing_deck"
+  ],
+  "rows": [
+   [
+    688
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-01": {
+  "columns": [
+   "day",
+   "n"
+  ],
+  "rows": [
+   [
+    "Monday",
+    708
+   ],
+   [
+    "Wednesday",
+    966
+   ],
+   [
+    "Tuesday",
+    825
+   ],
+   [
+    "Thursday",
+    905
+   ],
+   [
+    "Saturday",
+    1046
+   ],
+   [
+    "Sunday",
+    868
+   ],
+   [
+    "Friday",
+    1115
+   ]
+  ],
+  "row_count": 7
+ },
+ "taxis-02": {
+  "columns": [
+   "tip_pct"
+  ],
+  "rows": [
+   [
+    20.312928011369287
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-03": {
+  "columns": [
+   "pickup_borough",
+   "n"
+  ],
+  "rows": [
+   [
+    "Manhattan",
+    5268
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-04": {
+  "columns": [
+   "hour",
+   "n"
+  ],
+  "rows": [
+   [
+    18,
+    417
+   ]
+  ],
+  "row_count": 1
+ },
+ "taxis-05": {
+  "columns": [
+   "x",
+   "y"
+  ],
+  "rows": [],
+  "row_count": 6433,
+  "stat": {
+   "test": "spearman",
+   "statistic_name": "rho",
+   "statistic": 0.925744,
+   "p_value": 0.0,
+   "effect_size_name": "rho",
+   "effect_size": 0.925744,
+   "n": 6433,
+   "groups": [],
+   "note": ""
+  }
+ },
+ "flights-01": {
+  "columns": [
+   "year",
+   "total"
+  ],
+  "rows": [
+   [
+    1960,
+    5714
+   ]
+  ],
+  "row_count": 1
+ },
+ "flights-02": {
+  "columns": [
+   "year",
+   "total"
+  ],
+  "rows": [
+   [
+    1949,
+    1520
+   ],
+   [
+    1960,
+    5714
+   ]
+  ],
+  "row_count": 2
+ },
+ "flights-03": {
+  "columns": [
+   "x",
+   "y"
+  ],
+  "rows": [],
+  "row_count": 144,
+  "stat": {
+   "test": "trend",
+   "statistic_name": "kendall_tau",
+   "statistic": 0.830238,
+   "p_value": 6.72722e-46,
+   "effect_size_name": "tau",
+   "effect_size": 0.830238,
+   "n": 144,
+   "groups": [],
+   "note": ""
+  }
+ },
+ "mpg-01": {
+  "columns": [
+   "origin",
+   "avg_mpg"
+  ],
+  "rows": [
+   [
+    "usa",
+    20.083534136546177
+   ],
+   [
+    "europe",
+    27.891428571428573
+   ],
+   [
+    "japan",
+    30.450632911392397
+   ]
+  ],
+  "row_count": 3
+ },
+ "mpg-02": {
+  "columns": [
+   "n_missing"
+  ],
+  "rows": [
+   [
+    6
+   ]
+  ],
+  "row_count": 1
+ },
+ "cps-01": {
+  "columns": [
+   "gender",
+   "median_wage"
+  ],
+  "rows": [
+   [
+    "female",
+    6.8
+   ],
+   [
+    "male",
+    8.93
+   ]
+  ],
+  "row_count": 2
+ },
+ "cps-02": {
+  "columns": [
+   "union_pct"
+  ],
+  "rows": [
+   [
+    17.97752808988764
+   ]
+  ],
+  "row_count": 1
+ },
+ "cps-03": {
+  "columns": [
+   "x",
+   "y"
+  ],
+  "rows": [],
+  "row_count": 534,
+  "stat": {
+   "test": "mann_whitney",
+   "statistic_name": "U",
+   "statistic": 13779.5,
+   "p_value": 1.214e-07,
+   "effect_size_name": "rank_biserial",
+   "effect_size": -0.344582,
+   "n": 534,
+   "groups": [
+    {
+     "group": "False",
+     "n": 438,
+     "median": 7.07,
+     "mean": 8.63523
+    },
+    {
+     "group": "True",
+     "n": 96,
+     "median": 10.0,
+     "mean": 10.7981
+    }
+   ],
+   "note": ""
+  }
+ },
+ "ames-01": {
+  "columns": [
+   "neighborhood",
+   "avg_price"
+  ],
+  "rows": [
+   [
+    "Northridge",
+    330319.1267605634
+   ],
+   [
+    "Stone_Brook",
+    324229.1960784314
+   ],
+   [
+    "Northridge_Heights",
+    322018.265060241
+   ],
+   [
+    "Green_Hills",
+    280000.0
+   ],
+   [
+    "Veenker",
+    248314.58333333334
+   ]
+  ],
+  "row_count": 5
+ },
+ "ames-02": {
+  "columns": [
+   "n_with_pool"
+  ],
+  "rows": [
+   [
+    13
+   ]
+  ],
+  "row_count": 1
+ },
+ "ant-01": {
+  "columns": [
+   "pct_buggy"
+  ],
+  "rows": [
+   [
+    22.28187919463087
+   ]
+  ],
+  "row_count": 1
+ },
+ "ant-02": {
+  "columns": [
+   "x",
+   "y"
+  ],
+  "rows": [],
+  "row_count": 745,
+  "stat": {
+   "test": "spearman",
+   "statistic_name": "rho",
+   "statistic": 0.491949,
+   "p_value": 1.16638e-46,
+   "effect_size_name": "rho",
+   "effect_size": 0.491949,
+   "n": 745,
+   "groups": [],
+   "note": ""
+  }
+ },
+ "messy-01": {
+  "columns": [
+   "avg_experience"
+  ],
+  "rows": [
+   [
+    17.842718446601943
+   ]
+  ],
+  "row_count": 1
+ },
+ "join-01": {
+  "columns": [
+   "n"
+  ],
+  "rows": [
+   [
+    534
+   ]
+  ],
+  "row_count": 1
+ },
+ "ambiguous-01": {
+  "expected": "clarification"
+ },
+ "unanswerable-01": {
+  "expected": "cannot_answer"
+ }
+}

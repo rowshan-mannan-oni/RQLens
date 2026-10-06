@@ -19,6 +19,7 @@ from sqlglot.errors import SqlglotError
 
 from api.agent.grounding import collect_numbers
 from api.ingest.names import quote
+from api.semantic.column_retrieval import ColumnRetriever
 from api.semantic.pii import scrub
 from api.sql.executor import QueryResult
 from api.stats.library import TESTS, StatTestError, run_test
@@ -27,6 +28,8 @@ MODEL_ROWS = 50
 STAT_ROWS = 100_000
 WIDE_TABLE = 50
 MAX_CHART_SERIES = 4
+SEARCH_RESULTS = 15
+RELEVANT_COLUMNS = 15  # shown in full in the prompt for each wide table
 SAMPLE_KEYS = ("top_values", "samples")
 BULKY_KEYS = ("histogram",)  # aggregates, but long and rarely needed to answer a question
 
@@ -193,10 +196,26 @@ FINAL_ONLY = [t for t in TOOL_SPECS if t["function"]["name"] == "final_answer"]
 
 
 class ToolBox:
-    def __init__(self, ctx: ProjectContext, execute: Execute) -> None:
+    def __init__(
+        self, ctx: ProjectContext, execute: Execute, retriever: ColumnRetriever | None = None
+    ) -> None:
         self.ctx = ctx
         self.execute = execute
+        self.retriever = retriever or ColumnRetriever()
         self.state = ToolState()
+        # Wide table -> columns most relevant to the question, shown in full in the schema.
+        self.relevant: dict[str, list[ColumnInfo]] = {}
+
+    async def prepare(self, question: str) -> None:
+        """Pick the columns of each wide table that matter for this question."""
+        for t in self.ctx.tables:
+            if len(t.columns) > WIDE_TABLE:
+                ranked = await self.retriever.rank(
+                    question, [(t.table, c) for c in t.columns], RELEVANT_COLUMNS
+                )
+                self.relevant[t.table] = [
+                    r.column for r in ranked if isinstance(r.column, ColumnInfo)
+                ]
 
     # ----- schema -----
 
@@ -208,9 +227,13 @@ class ToolBox:
             entry: dict[str, Any] = {"table": t.table, "file": t.filename, "rows": t.rows}
             if wide:
                 entry["columns"] = [f"{c.name} ({c.semantic_type})" for c in t.columns]
+                relevant = self.relevant.get(t.table)
+                if relevant:
+                    entry["relevant_columns"] = [self._column_line(c) for c in relevant]
                 entry["note"] = (
-                    f"{len(t.columns)} columns; descriptions omitted. Use search_columns or "
-                    "get_schema with this table."
+                    f"{len(t.columns)} columns; descriptions omitted"
+                    + (" except for the columns most relevant to the question" if relevant else "")
+                    + ". Use search_columns or get_schema with this table."
                 )
             else:
                 entry["columns"] = [self._column_line(c) for c in t.columns]
@@ -256,21 +279,19 @@ class ToolBox:
         clean: dict[str, Any] = json.loads(json.dumps(out, default=str))
         return clean
 
-    def search(self, query: str) -> dict[str, Any]:
-        words = {w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 1}
-        if not words:
+    async def search(self, query: str) -> dict[str, Any]:
+        if not re.findall(r"[a-z0-9]{2,}", query.lower()):
             raise ToolError("The query has no searchable words.")
-        scored: list[tuple[int, dict[str, Any]]] = []
-        for t in self.ctx.tables:
-            for c in t.columns:
-                name_words = set(re.findall(r"[a-z0-9]+", f"{c.name} {c.label or ''}".lower()))
-                desc_words = set(re.findall(r"[a-z0-9]+", (c.description or "").lower()))
-                score = 3 * len(words & name_words) + len(words & desc_words)
-                score += sum(1 for w in words if any(n.startswith(w) for n in name_words))
-                if score:
-                    scored.append((score, {"table": t.table, **self._column_line(c)}))
-        scored.sort(key=lambda s: -s[0])
-        return {"matches": [m for _, m in scored[:15]]}
+        ranked = await self.retriever.rank(
+            query, [(t.table, c) for t in self.ctx.tables for c in t.columns], SEARCH_RESULTS
+        )
+        return {
+            "matches": [
+                {"table": r.table, **self._column_line(r.column)}
+                for r in ranked
+                if isinstance(r.column, ColumnInfo)
+            ]
+        }
 
     # ----- queries -----
 
@@ -416,7 +437,7 @@ class ToolBox:
             return self.column_profile(a["table"], a["column"])
         if name == "search_columns":
             step.summary = f"Searched columns for “{a['query']}”"
-            return self.search(a["query"])
+            return await self.search(a["query"])
         if name == "run_sql":
             step.summary = str(a.get("purpose") or "Ran a query")
             step.query_id, out = await self.run_sql(a["sql"])

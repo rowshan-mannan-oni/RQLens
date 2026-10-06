@@ -85,6 +85,7 @@ async def run_agent(
 ) -> AsyncIterator[Event]:
     """Yield progress events; the last one is {"type": "done", "outcome": Outcome}."""
     started = time.perf_counter()
+    await box.prepare(question)
     messages: list[Message] = [
         {"role": "system", "content": system_prompt(box)},
         *list(history)[-HISTORY_MESSAGES:],

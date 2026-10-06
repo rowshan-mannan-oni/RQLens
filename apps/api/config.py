@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     llm_max_retries: int = 3
     # USD per 1M tokens as {"model": [input, output]}. Models not listed cost 0 (free tier).
     llm_prices: dict[str, tuple[float, float]] = {}
+    # Embeddings for column retrieval on wide tables. Empty disables them (word matching only).
+    llm_embedding_model: str = "gemini-embedding-001"
 
 
 @lru_cache
