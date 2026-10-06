@@ -1,0 +1,197 @@
+"""Provider-neutral LLM client over the OpenAI-compatible chat completions protocol.
+
+Works with Gemini, Groq, OpenRouter, Ollama, or OpenAI by changing LLM_BASE_URL and LLM_MODEL.
+Retries on 429, 5xx, and timeouts are handled by the SDK with exponential backoff.
+"""
+
+import time
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from decimal import Decimal
+from typing import Any, cast
+
+import httpx2
+from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
+from pydantic import BaseModel, ValidationError
+
+from api.config import get_settings
+from api.llm.pricing import cost_usd
+from api.llm.tracing import Tracer, TraceRecord, db_tracer
+
+Message = Mapping[str, Any]
+
+
+class StructuredOutputError(Exception):
+    """The model did not return output matching the schema after all attempts."""
+
+
+@dataclass(frozen=True)
+class LLMResult[T: BaseModel]:
+    text: str
+    parsed: T | None
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: Decimal
+    latency_ms: int
+
+
+class LLMClient:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout_s: float = 60.0,
+        max_retries: int = 3,
+        prices: Mapping[str, tuple[float, float]] | None = None,
+        tracer: Tracer = db_tracer,
+        http_client: httpx2.AsyncClient | None = None,
+    ) -> None:
+        self.model = model
+        self._prices = prices or {}
+        self._tracer = tracer
+        self._client = AsyncOpenAI(
+            base_url=base_url,
+            api_key=api_key or "unset",
+            timeout=timeout_s,
+            max_retries=max_retries,
+            http_client=http_client,
+        )
+
+    @classmethod
+    def from_settings(cls, tracer: Tracer = db_tracer) -> "LLMClient":
+        s = get_settings()
+        return cls(
+            base_url=s.llm_base_url,
+            api_key=s.llm_api_key,
+            model=s.llm_model,
+            timeout_s=s.llm_timeout_s,
+            max_retries=s.llm_max_retries,
+            prices=s.llm_prices,
+            tracer=tracer,
+        )
+
+    async def complete(
+        self,
+        messages: Sequence[Message],
+        *,
+        step: str,
+        model: str | None = None,
+        prompt_version: str | None = None,
+        project_id: int | None = None,
+        eval_run_id: int | None = None,
+        temperature: float = 0.0,
+        response_format: dict[str, Any] | None = None,
+    ) -> LLMResult[BaseModel]:
+        """One chat completion, traced."""
+        model = model or self.model
+        request: dict[str, Any] = {
+            "model": model,
+            "messages": list(messages),
+            "temperature": temperature,
+        }
+        if response_format is not None:
+            request["response_format"] = response_format
+
+        started = time.perf_counter()
+        response = cast(ChatCompletion, await self._client.chat.completions.create(**request))
+        latency_ms = round((time.perf_counter() - started) * 1000)
+
+        input_tokens = response.usage.prompt_tokens if response.usage else 0
+        output_tokens = response.usage.completion_tokens if response.usage else 0
+        cost = cost_usd(self._prices, model, input_tokens, output_tokens)
+        text = response.choices[0].message.content or "" if response.choices else ""
+
+        await self._tracer(
+            TraceRecord(
+                step=step,
+                model=model,
+                prompt_version=prompt_version,
+                project_id=project_id,
+                eval_run_id=eval_run_id,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=cost,
+                latency_ms=latency_ms,
+                request_json=request,
+                response_json=response.model_dump(mode="json"),
+            )
+        )
+        return LLMResult(
+            text=text,
+            parsed=None,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost,
+            latency_ms=latency_ms,
+        )
+
+    async def complete_structured[T: BaseModel](
+        self,
+        messages: Sequence[Message],
+        schema: type[T],
+        *,
+        step: str,
+        max_attempts: int = 3,
+        **kwargs: Any,
+    ) -> LLMResult[T]:
+        """Completion parsed into `schema`. On invalid output, retry with the error appended.
+
+        Token counts and cost in the result cover all attempts.
+        """
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()},
+        }
+        conversation: list[Message] = list(messages)
+        input_tokens = output_tokens = latency_ms = 0
+        cost = Decimal(0)
+        error = ""
+
+        for _ in range(max_attempts):
+            result = await self.complete(
+                conversation, step=step, response_format=response_format, **kwargs
+            )
+            input_tokens += result.input_tokens
+            output_tokens += result.output_tokens
+            cost += result.cost_usd
+            latency_ms += result.latency_ms
+            try:
+                parsed = schema.model_validate_json(_strip_code_fence(result.text))
+            except ValidationError as exc:
+                error = str(exc)
+                conversation += [
+                    {"role": "assistant", "content": result.text},
+                    {
+                        "role": "user",
+                        "content": "Your reply did not match the required JSON schema:\n"
+                        f"{error}\nReply again with only valid JSON matching the schema.",
+                    },
+                ]
+                continue
+            return LLMResult(
+                text=result.text,
+                parsed=parsed,
+                model=result.model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=cost,
+                latency_ms=latency_ms,
+            )
+
+        raise StructuredOutputError(
+            f"{schema.__name__}: no valid output after {max_attempts} attempts. Last error: {error}"
+        )
+
+
+def _strip_code_fence(text: str) -> str:
+    """Some providers wrap JSON in ```json fences even when asked for a schema."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[1] if "\n" in stripped else ""
+        stripped = stripped.removesuffix("```").strip()
+    return stripped

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+
+# Uploaded data and per-project DuckDB files
+data/
+*.duckdb
+*.duckdb.wal
+
+# Eval caches (reports are committed)
+evals/.cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# pnpm store created by older container runs
+.pnpm-store/

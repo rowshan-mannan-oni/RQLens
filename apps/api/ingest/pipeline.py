@@ -1,0 +1,44 @@
+"""Synchronous load and profile steps, run by the worker in a thread.
+
+Each step opens the project's DuckDB file itself; the worker holds a per-project lock so only
+one writer touches a file at a time.
+"""
+
+from pathlib import Path
+from typing import Any
+
+import duckdb
+
+from api.config import get_settings
+from api.ingest.loader import LoadReport, load_csv
+from api.profiler.joins import JoinTable, find_joins
+from api.profiler.tables import DatasetProfile, profile_table
+
+
+def connect(db_path: Path, *, read_only: bool = False) -> duckdb.DuckDBPyConnection:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return duckdb.connect(
+        str(db_path),
+        read_only=read_only,
+        config={
+            "memory_limit": get_settings().duckdb_memory_limit,
+            "enable_external_access": True,  # needed to read the uploaded CSV
+        },
+    )
+
+
+def run_load(db_path: Path, csv_path: Path, table_name: str) -> LoadReport:
+    with connect(db_path) as con:
+        return load_csv(con, csv_path, table_name)
+
+
+def run_profile(db_path: Path, report: LoadReport) -> DatasetProfile:
+    with connect(db_path) as con:
+        return profile_table(con, report)
+
+
+def run_joins(db_path: Path, new: JoinTable, others: list[JoinTable]) -> list[dict[str, Any]]:
+    if not others:
+        return []
+    with connect(db_path) as con:
+        return find_joins(con, new, others)

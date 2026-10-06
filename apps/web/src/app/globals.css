@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Charts: one series colour, recessive grid and axes (dataviz reference palette). */
+  --chart-1: #2a78d6;
+  --chart-grid: #e7e6e2;
+  --chart-axis: #52514e;
+  --chart-surface: #ffffff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --chart-1: #3987e5;
+    --chart-grid: #2c2c2a;
+    --chart-axis: #c3c2b7;
+    --chart-surface: #0a0a0a;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}

@@ -1,0 +1,85 @@
+x-api-env: &api-env
+  DATABASE_URL: postgresql+psycopg://rqlens:rqlens@postgres:5432/rqlens
+  REDIS_URL: redis://redis:6379/0
+  DATA_DIR: /data
+  # Docker Desktop on Windows does not forward file events into containers; poll instead.
+  WATCHFILES_FORCE_POLLING: "true"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rqlens
+      POSTGRES_PASSWORD: rqlens
+      POSTGRES_DB: rqlens
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rqlens"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 20
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment: *api-env
+    env_file: [{ path: .env, required: false }]
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/api"
+    ports: ["8000:8000"]
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./data:/data
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment: *api-env
+    env_file: [{ path: .env, required: false }]
+    command: arq api.worker.WorkerSettings --watch apps/api
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./data:/data
+    depends_on:
+      api: { condition: service_started }
+
+  # Optional: the web app normally runs on the host (pnpm dev in apps/web) because Docker
+  # Desktop on Windows does not forward file changes. Start this with --profile docker-web.
+  web:
+    profiles: [docker-web]
+    image: node:24-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile --store-dir /pnpm-store && pnpm dev --hostname 0.0.0.0"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      API_URL_INTERNAL: http://api:8000
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      WATCHPACK_POLLING: "true"
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: http://localhost:3000
+      CI: "true"
+    env_file: [{ path: .env, required: false }]
+    ports: ["3000:3000"]
+    volumes:
+      - ./apps/web:/app
+      # Keep Linux node_modules and build cache inside the container, separate from Windows ones.
+      - web_node_modules:/app/node_modules
+      - web_next:/app/.next
+      - pnpm_store:/pnpm-store
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  web_node_modules:
+  web_next:
+  pnpm_store:
