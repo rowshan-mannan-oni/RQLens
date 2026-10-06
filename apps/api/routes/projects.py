@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from api.auth import CurrentUser
 from api.db.models import Dataset, Project
+from api.limits import enforce_project_limit
 from api.routes.deps import PROCESSING, OwnedProject, Queue, Session, duckdb_lock
 from api.storage import project_dir
 
@@ -47,6 +48,7 @@ async def list_projects(user: CurrentUser, session: Session) -> list[ProjectOut]
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_project(body: ProjectCreate, user: CurrentUser, session: Session) -> ProjectOut:
+    await enforce_project_limit(session, user.id)
     project = Project(user_id=user.id, title=body.title.strip(), topic=body.topic)
     session.add(project)
     await session.commit()

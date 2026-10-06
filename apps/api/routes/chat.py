@@ -23,6 +23,7 @@ from api.agent.loop import Event, Outcome, run_agent
 from api.agent.tools import ProjectContext, ToolBox, ToolError
 from api.db.models import Chat, Message, Query
 from api.db.session import get_sessionmaker
+from api.limits import WithinAIBudget
 from api.llm.client import LLMClient
 from api.routes.deps import OwnedProject, Queue, Session
 from api.routes.query import execute_logged
@@ -130,7 +131,12 @@ async def delete_chat(chat_id: int, project: OwnedProject, session: Session) -> 
 
 @router.post("/{chat_id}/messages")
 async def ask(
-    chat_id: int, body: QuestionIn, project: OwnedProject, session: Session, queue: Queue
+    chat_id: int,
+    body: QuestionIn,
+    project: OwnedProject,
+    session: Session,
+    queue: Queue,
+    _: WithinAIBudget,
 ) -> StreamingResponse:
     chat = await _owned_chat(chat_id, project.id, session)
     ctx = await load_project_context(session, project)

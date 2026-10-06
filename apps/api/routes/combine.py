@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from api.db.models import Dataset, DatasetColumn
 from api.ingest.names import sanitize_identifier
+from api.limits import enforce_dataset_limit
 from api.profiler.compare import CompareColumn, CompareTable, compare
 from api.routes.datasets import DatasetOut
 from api.routes.deps import OwnedProject, Queue, Session
@@ -113,6 +114,7 @@ async def compare_datasets(
 async def create_combined(
     body: CombineIn, project: OwnedProject, session: Session, queue: Queue
 ) -> DatasetOut:
+    await enforce_dataset_limit(session, project.id)
     if body.mode == "stack":
         ids = list(dict.fromkeys(body.dataset_ids))
         spec: dict[str, Any] = {"mode": "stack", "dataset_ids": ids}

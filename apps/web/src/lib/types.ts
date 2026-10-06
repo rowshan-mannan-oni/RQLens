@@ -450,3 +450,39 @@ export type InsightRun = {
 };
 
 export type Insights = { run: InsightRun | null; insights: Insight[] };
+
+// Usage (apps/api/routes/usage.py)
+
+export type StepUsage = {
+  step: string;
+  calls: number;
+  cost_usd: string;
+  avg_latency_ms: number;
+};
+
+export type ProjectUsage = {
+  project_id: number;
+  title: string;
+  calls: number;
+  failed_calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: string;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  queries: number;
+  avg_query_ms: number;
+  steps: StepUsage[];
+};
+
+export type Usage = {
+  period: "month" | "all";
+  since: string | null;
+  month_calls: number;
+  month_cost_usd: string;
+  call_limit: number;
+  budget_usd: number;
+  resets_on: string;
+  limits: { projects: number; datasets_per_project: number; upload_mb: number };
+  projects: ProjectUsage[];
+};

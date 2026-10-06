@@ -14,6 +14,14 @@ class Settings(BaseSettings):
     # One .duckdb file per project lives here.
     data_dir: Path = Path("data")
     max_upload_bytes: int = 500 * 1024 * 1024
+
+    # Per-user limits. 0 means no limit.
+    max_projects_per_user: int = 20
+    max_datasets_per_project: int = 50
+    # AI use per calendar month (UTC), summed over the user's projects. Free-tier models cost
+    # nothing, so the call count is the limit that applies to them.
+    monthly_llm_budget_usd: float = 5.0
+    monthly_llm_calls: int = 2000
     duckdb_memory_limit: str = "2GB"
 
     cors_origins: list[str] = ["http://localhost:3000"]

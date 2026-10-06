@@ -19,6 +19,7 @@ from api.ingest.combine import CombinePlan, SourceTable, join_plan, stack_plan
 from api.ingest.loader import LoadReport
 from api.ingest.pipeline import run_combine_plan, run_joins, run_load, run_pii, run_profile
 from api.insights.jobs import generate_insights
+from api.limits import ai_usage, over_limit_message
 from api.llm.client import LLMClient
 from api.profiler.joins import JoinColumn, JoinTable
 from api.rq.jobs import TRIES as RQ_TRIES
@@ -225,6 +226,12 @@ async def describe_dataset(ctx: dict[str, Any], dataset_id: int) -> str:
         if not settings.llm_api_key:
             dataset.describe_status = "skipped"
             dataset.describe_error = "LLM_API_KEY is not set"
+            await session.commit()
+            return "skipped"
+        over = over_limit_message(await ai_usage(session, project.user_id))
+        if over:
+            dataset.describe_status = "skipped"
+            dataset.describe_error = over
             await session.commit()
             return "skipped"
         columns = (

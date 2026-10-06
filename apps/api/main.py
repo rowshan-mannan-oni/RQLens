@@ -18,6 +18,7 @@ from api.routes import (
     relationships,
     report,
     rqs,
+    usage,
 )
 
 
@@ -48,3 +49,4 @@ app.include_router(chat.router)
 app.include_router(rqs.router)
 app.include_router(insights.router)
 app.include_router(report.router)
+app.include_router(usage.router)
