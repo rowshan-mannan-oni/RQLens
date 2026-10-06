@@ -39,6 +39,9 @@ class LoadReport:
     row_count: int
     columns: list[LoadedColumn]
     warnings: list[DataWarning] = field(default_factory=list)
+    # Column descriptions found in the file itself (SPSS and Stata variable labels), by the
+    # safe column name. Stored like a data dictionary.
+    descriptions: dict[str, str] = field(default_factory=dict)
 
 
 def load_csv(con: duckdb.DuckDBPyConnection, csv_path: Path, table_name: str) -> LoadReport:
@@ -74,7 +77,14 @@ def load_csv(con: duckdb.DuckDBPyConnection, csv_path: Path, table_name: str) ->
 
     warnings += _rejected_rows(con, rejects)
     con.execute(f"DROP TABLE IF EXISTS {quote(rejects)}; DROP TABLE IF EXISTS {quote(scans)}")
+    return finish_load(con, raw, table_name, warnings)
 
+
+def finish_load(
+    con: duckdb.DuckDBPyConnection, raw: str, table_name: str, warnings: list[DataWarning]
+) -> LoadReport:
+    """Turn the raw table into `table_name`: safe column names, and text columns that are
+    really numbers or dates re-typed. Drops the raw table."""
     raw_columns: list[tuple[str, str]] = [
         (row[0], row[1]) for row in con.execute(f"DESCRIBE {quote(raw)}").fetchall()
     ]

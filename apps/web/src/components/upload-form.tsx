@@ -14,9 +14,26 @@ type Item = {
   error?: string;
 };
 
+const ACCEPTED = [
+  ".csv",
+  ".tsv",
+  ".txt",
+  ".xlsx",
+  ".xlsm",
+  ".sav",
+  ".zsav",
+  ".por",
+  ".dta",
+  ".parquet",
+  ".pq",
+];
+
 function check(file: File): string | undefined {
-  if (!file.name.toLowerCase().endsWith(".csv"))
-    return "Only .csv files are accepted.";
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".xls"))
+    return "Old Excel files (.xls) are not supported. Save it as .xlsx and upload again.";
+  if (!ACCEPTED.some((ext) => name.endsWith(ext)))
+    return "Upload CSV, Excel (.xlsx), SPSS (.sav), Stata (.dta) or Parquet files.";
   if (file.size > MAX_BYTES) return "The file is larger than 500 MB.";
   if (file.size === 0) return "The file is empty.";
 }
@@ -117,15 +134,16 @@ export function UploadForm({ projectId }: { projectId: number }) {
           <UploadCloud className="h-5 w-5" aria-hidden />
         </span>
         <span className="text-sm font-medium">
-          {busy ? "Uploading…" : "Drop CSV files here, or click to choose"}
+          {busy ? "Uploading…" : "Drop data files here, or click to choose"}
         </span>
         <span className="text-subtle text-xs">
-          Up to 500 MB each · every file becomes its own table
+          CSV, Excel, SPSS, Stata or Parquet · up to 500 MB each · every file
+          becomes its own table
         </span>
         <input
           id="csv-upload"
           type="file"
-          accept=".csv,text/csv"
+          accept={ACCEPTED.join(",")}
           multiple
           disabled={busy}
           onChange={(e) => {

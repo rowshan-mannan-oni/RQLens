@@ -25,6 +25,7 @@ dependencies = [
     "weasyprint>=63",
     "pymupdf>=1.24",
     "openpyxl>=3.1",
+    "pyreadstat>=1.2.8",
 ]
 
 [project.optional-dependencies]
@@ -64,7 +65,7 @@ mypy_path = "apps"
 packages = ["api"]
 
 [[tool.mypy.overrides]]
-module = ["arq.*", "scipy.*", "weasyprint.*", "markdown.*", "sentry_sdk.*", "pymupdf.*", "openpyxl.*"]
+module = ["arq.*", "scipy.*", "weasyprint.*", "markdown.*", "sentry_sdk.*", "pymupdf.*", "openpyxl.*", "pyreadstat.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -58,7 +58,7 @@ export function CombineForm({
   const defaultName =
     mode === "stack"
       ? `Stacked ${tables.length} files`
-      : `${label(left).replace(/\.csv$/i, "")} + ${label(right).replace(/\.csv$/i, "")}`;
+      : `${label(left).replace(/\.(csv|tsv|txt|xlsx|xlsm|sav|zsav|por|dta|parquet|pq)$/i, "")} + ${label(right).replace(/\.(csv|tsv|txt|xlsx|xlsm|sav|zsav|por|dta|parquet|pq)$/i, "")}`;
 
   return (
     <form action={action} className="card flex flex-col gap-4 p-4">

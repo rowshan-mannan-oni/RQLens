@@ -100,7 +100,8 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
             <div>
               <h2 className="section-title">Datasets</h2>
               <p className="lead">
-                Each CSV becomes a table. Profiles run in the background.
+                Each file becomes a table. SPSS and Stata variable labels fill
+                the data dictionary. Profiles run in the background.
               </p>
             </div>
             <UploadForm projectId={project.id} />
