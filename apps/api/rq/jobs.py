@@ -30,6 +30,7 @@ from api.sql.executor import QueryResult
 log = logging.getLogger(__name__)
 
 TRIES = 4
+NO_DATA_ERROR = "Upload a dataset first."
 RETRY_S = 30
 TRANSIENT = (openai.RateLimitError, openai.InternalServerError, openai.APIConnectionError)
 
@@ -73,7 +74,7 @@ async def assess_rq(ctx: dict[str, Any], rq_id: int, version: int) -> str:
         await session.commit()
 
     if not project_ctx.tables:
-        await _set(rq_id, version, status="failed", error="Upload a dataset first.")
+        await _set(rq_id, version, status="failed", error=NO_DATA_ERROR)
         return "failed"
     if not get_settings().llm_api_key and (parsed is None or mapping is None):
         await _set(rq_id, version, status="failed", error="LLM_API_KEY is not set.")
@@ -89,7 +90,9 @@ async def assess_rq(ctx: dict[str, Any], rq_id: int, version: int) -> str:
             except HTTPException as exc:
                 return None, QueryResult(sql, [], [], [], 0, False, 0, str(exc.detail))
 
-    client = LLMClient.from_settings()
+    # Without a key, questions with a parse and mapping are still measured and decided; the
+    # explanation then lists the rule results.
+    client = LLMClient.from_settings() if get_settings().llm_api_key else None
     try:
         a = await assess(
             client,
@@ -99,7 +102,7 @@ async def assess_rq(ctx: dict[str, Any], rq_id: int, version: int) -> str:
             parsed=parsed,
             mapping=mapping,
             associations=_associations_for(project_ctx, mapping, associations),
-            retriever=_retriever(client, project_id),
+            retriever=_retriever(client, project_id) if client else None,
         )
     except TRANSIENT as exc:
         attempt = int(ctx.get("job_try", 1))

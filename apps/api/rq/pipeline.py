@@ -47,7 +47,7 @@ class Assessment:
 
 
 async def assess(
-    client: LLMClient,
+    client: LLMClient | None,
     ctx: ProjectContext,
     text: str,
     execute: Execute,
@@ -59,10 +59,14 @@ async def assess(
 ) -> Assessment:
     pid = ctx.project_id or None
     problems: list[str] = []
+    if client is None and (parsed is None or mapping is None):
+        raise ValueError("Parsing and mapping a question need an AI model (LLM_API_KEY).")
     if parsed is None:
+        assert client is not None
         parsed = await mapper.parse(client, text, ctx.topic, pid)
         mapping = None  # a new parse invalidates any mapping
     if mapping is None:
+        assert client is not None
         mapping, problems = await mapper.map_constructs(client, ctx, text, parsed, retriever, pid)
     else:
         mapping, problems = mapper.validate(ctx, mapping)
@@ -74,6 +78,8 @@ async def assess(
 
     payload = writer.assessment_payload(parsed, mapping, verdict, rules, report.facts)
     try:
+        if client is None:
+            raise RuntimeError("no AI model configured")
         writeup, check = await writer.explain(client, text, payload, pid)
         explained_by = "llm"
     except Exception as exc:  # keep the verdict even when the model is unavailable

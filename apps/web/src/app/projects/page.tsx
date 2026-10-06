@@ -1,4 +1,4 @@
-import { ArrowRight, FolderOpen, Plus } from "lucide-react";
+import { ArrowRight, FolderOpen, Plus, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -6,19 +6,27 @@ import { apiFetch } from "@/lib/api";
 import type { Project } from "@/lib/types";
 
 import { deleteProject } from "./[id]/actions";
-import { createProject } from "./actions";
+import { createProject, createSampleProject } from "./actions";
 
 export default async function ProjectsPage() {
   const projects = await apiFetch<Project[]>("/projects");
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-        <p className="lead mt-1">
-          A project holds your datasets, research questions, insights and chats
-          about one study.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+          <p className="lead mt-1">
+            A project holds your datasets, research questions, insights and
+            chats about one study.
+          </p>
+        </div>
+        <form action={createSampleProject}>
+          <button className="btn btn-secondary">
+            <Sparkles className="text-brand h-4 w-4" aria-hidden />
+            Try a sample project
+          </button>
+        </form>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -116,7 +124,9 @@ export default async function ProjectsPage() {
 
       {projects.length === 0 && (
         <p className="text-muted text-sm">
-          No projects yet. Create one to upload your first dataset.
+          No projects yet. Create one to upload your first dataset, or try the
+          sample project: a public penguin dataset with three research
+          questions, ready to explore.
         </p>
       )}
     </main>

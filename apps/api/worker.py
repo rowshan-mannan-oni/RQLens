@@ -13,7 +13,14 @@ from arq.worker import func
 from sqlalchemy import delete, or_, select
 
 from api.config import get_settings
-from api.db.models import Dataset, DatasetColumn, Project, TableProfile, TableRelationship
+from api.db.models import (
+    Dataset,
+    DatasetColumn,
+    Project,
+    ResearchQuestion,
+    TableProfile,
+    TableRelationship,
+)
 from api.db.session import get_sessionmaker
 from api.ingest.combine import CombinePlan, SourceTable, join_plan, stack_plan
 from api.ingest.loader import LoadReport
@@ -22,8 +29,8 @@ from api.insights.jobs import generate_insights
 from api.limits import ai_usage, over_limit_message
 from api.llm.client import LLMClient
 from api.profiler.joins import JoinColumn, JoinTable
+from api.rq.jobs import NO_DATA_ERROR, assess_rq, suggest_rqs
 from api.rq.jobs import TRIES as RQ_TRIES
-from api.rq.jobs import assess_rq, suggest_rqs
 from api.semantic.describer import column_evidence, describe
 from api.storage import project_db_path, upload_path
 
@@ -210,7 +217,31 @@ async def _build(
         await session.commit()
 
     await ctx["redis"].enqueue_job("describe_dataset", dataset_id)
+    await _assess_waiting_questions(ctx, project_id)
     return "ready"
+
+
+async def _assess_waiting_questions(ctx: dict[str, Any], project_id: int) -> None:
+    """Assess research questions that were added before any data was ready."""
+    async with get_sessionmaker()() as session:
+        waiting = list(
+            await session.scalars(
+                select(ResearchQuestion).where(
+                    ResearchQuestion.project_id == project_id,
+                    or_(
+                        ResearchQuestion.status == "queued",
+                        ResearchQuestion.error == NO_DATA_ERROR,
+                    ),
+                )
+            )
+        )
+        for rq in waiting:
+            rq.version += 1
+            rq.status, rq.error = "queued", None
+        await session.commit()
+        jobs = [(rq.id, rq.version) for rq in waiting]
+    for rq_id, version in jobs:
+        await ctx["redis"].enqueue_job("assess_rq", rq_id, version)
 
 
 async def describe_dataset(ctx: dict[str, Any], dataset_id: int) -> str:
