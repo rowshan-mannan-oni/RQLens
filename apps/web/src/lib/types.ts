@@ -486,3 +486,107 @@ export type Usage = {
   limits: { projects: number; datasets_per_project: number; upload_mb: number };
   projects: ProjectUsage[];
 };
+
+// --- Literature review ------------------------------------------------------
+
+export type PaperStatus =
+  "queued" | "parsing" | "ready" | "needs_ocr" | "failed";
+
+export type Paper = {
+  id: number;
+  filename: string;
+  folder: string | null;
+  size_bytes: number;
+  status: PaperStatus;
+  error: string | null;
+  page_count: number | null;
+  passage_count: number | null;
+  title: string | null;
+  authors_json: string[] | null;
+  year: number | null;
+  venue: string | null;
+  doi: string | null;
+  metadata_source_json: Record<string, string> | null;
+  created_at: string;
+};
+
+export type PassageInfo = {
+  id: number;
+  ordinal: number;
+  label: string;
+  page: number;
+  section: string | null;
+  section_kind: string;
+  kind: "sentence" | "caption" | "reference";
+  text: string;
+  rects_json: [number, number, number, number][];
+};
+
+export type ColumnKind = "text" | "list" | "number" | "category";
+
+export type TemplateColumn = {
+  key: string;
+  label: string;
+  instructions: string;
+  kind: ColumnKind;
+  options: string[];
+  required: boolean;
+  metadata: "title" | "authors" | "year" | "venue" | "doi" | null;
+};
+
+export type ReviewTemplate = {
+  key: string;
+  name: string;
+  description: string;
+  columns: TemplateColumn[];
+  builtin: boolean;
+  version: number;
+};
+
+export type Citation = {
+  passage_id: number | null;
+  label: string;
+  page: number | null;
+  quote: string;
+  score: number | null;
+  verified: boolean;
+  problem?: string;
+};
+
+export type CellStatus =
+  "queued" | "running" | "done" | "not_found" | "unverified" | "failed";
+
+export type CellValue = string | number | string[] | null;
+
+export type ReviewCell = {
+  id: number;
+  paper_id: number;
+  column_key: string;
+  status: CellStatus;
+  value_json: CellValue;
+  source: "llm" | "metadata" | "user" | null;
+  citations_json: Citation[] | null;
+  confidence: "high" | "medium" | "low" | null;
+  note: string | null;
+  ai_json: {
+    status: CellStatus;
+    value: CellValue;
+    citations: Citation[];
+    note: string | null;
+  } | null;
+  review: "accepted" | "rejected" | null;
+  updated_at: string;
+};
+
+export type ReviewTableSummary = {
+  id: number;
+  name: string;
+  template_key: string;
+  created_at: string;
+};
+
+export type ReviewTable = ReviewTableSummary & {
+  columns: TemplateColumn[];
+  papers: Paper[];
+  cells: ReviewCell[];
+};

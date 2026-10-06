@@ -1,0 +1,43 @@
+import { notFound, redirect } from "next/navigation";
+
+import { auth } from "@/auth";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { ReviewTableView } from "@/components/literature/review-table";
+import { ApiError, apiFetch } from "@/lib/api";
+import type { ReviewTable } from "@/lib/types";
+
+export default async function ReviewTablePage(
+  props: PageProps<"/projects/[id]/literature/[tableId]">,
+) {
+  const session = await auth();
+  if (!session?.user) redirect("/");
+  const { id, tableId } = await props.params;
+  let table: ReviewTable;
+  try {
+    table = await apiFetch<ReviewTable>(
+      `/projects/${id}/review-tables/${tableId}`,
+    );
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 404 || e.status === 422))
+      notFound();
+    throw e;
+  }
+  const working =
+    table.cells.some((c) => c.status === "queued" || c.status === "running") ||
+    table.papers.some((p) => p.status === "queued" || p.status === "parsing");
+  return (
+    <>
+      <AutoRefresh active={working} ms={2500} />
+      {/* Wider than the page column, since review tables have many columns. Centred with
+          margins rather than a transform, which would break the reader's fixed panel. */}
+      <div
+        style={{
+          width: "min(100vw - 3rem, 110rem)",
+          marginLeft: "calc((100% - min(100vw - 3rem, 110rem)) / 2)",
+        }}
+      >
+        <ReviewTableView projectId={Number(id)} table={table} />
+      </div>
+    </>
+  );
+}
