@@ -28,3 +28,6 @@ Thumbs.db
 
 # pnpm store created by older container runs
 .pnpm-store/
+
+# Local Redis snapshot
+dump.rdb
