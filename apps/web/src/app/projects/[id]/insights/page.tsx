@@ -174,7 +174,7 @@ export default async function InsightsPage(
         {hasData && (
           <div className="card flex flex-col gap-3 p-4">
             <p className="eyebrow">Generation</p>
-            <form action={generateInsights.bind(null, project.id)}>
+            <form data-edit action={generateInsights.bind(null, project.id)}>
               <button disabled={running} className="btn btn-primary w-full">
                 {running ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />

@@ -25,19 +25,41 @@ import type {
   Insights,
   Project,
   Relationship,
+  ProjectComment,
   ResearchQuestions,
 } from "@/lib/types";
+import { CommentThread } from "@/components/sharing/comment-thread";
 
 export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const { id } = await props.params;
   // The layout already checked that the project exists and belongs to the user.
-  const [project, datasets, joins, rqs, insights] = await Promise.all([
-    apiFetch<Project>(`/projects/${id}`),
-    apiFetch<Dataset[]>(`/projects/${id}/datasets`),
-    apiFetch<Relationship[]>(`/projects/${id}/relationships`),
-    apiFetch<ResearchQuestions>(`/projects/${id}/rqs`),
-    apiFetch<Insights>(`/projects/${id}/insights`),
-  ]);
+  const [project, datasets, joins, rqs, insights, comments] = await Promise.all(
+    [
+      apiFetch<Project>(`/projects/${id}`),
+      apiFetch<Dataset[]>(`/projects/${id}/datasets`),
+      apiFetch<Relationship[]>(`/projects/${id}/relationships`),
+      apiFetch<ResearchQuestions>(`/projects/${id}/rqs`),
+      apiFetch<Insights>(`/projects/${id}/insights`),
+      apiFetch<ProjectComment[]>(`/projects/${id}/comments`),
+    ],
+  );
+  const projectComments = comments.filter((c) => c.target_type === "project");
+  const elsewhere = comments.filter(
+    (c) => c.target_type !== "project" && !c.resolved,
+  );
+  const elsewhereHref = (c: ProjectComment) =>
+    c.target_type === "rq"
+      ? `/projects/${id}/rqs#rq-${c.target_id}`
+      : c.target_type === "insight"
+        ? `/projects/${id}/insights`
+        : `/projects/${id}/literature`;
+  const elsewhereLabel = {
+    rq: "Research question",
+    cell: "Literature table",
+    insight: "Insight",
+    paper: "Paper",
+    project: "Project",
+  };
   const working = datasets.some(
     (d) => d.status !== "ready" && d.status !== "failed",
   );
@@ -160,6 +182,39 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         </div>
 
         <aside className="flex flex-col gap-4">
+          <section
+            aria-label="Discussion"
+            className="card flex flex-col gap-3 p-4"
+          >
+            <p className="eyebrow">Discussion</p>
+            {elsewhere.length > 0 && (
+              <ul className="flex flex-col gap-1.5 text-xs">
+                {elsewhere.slice(-5).map((c) => (
+                  <li key={c.id}>
+                    <a
+                      href={elsewhereHref(c)}
+                      className="hover:text-fg text-muted"
+                    >
+                      <span className="text-fg font-medium">{c.author}</span> on{" "}
+                      {elsewhereLabel[c.target_type].toLowerCase()}:{" "}
+                      {c.body.length > 80
+                        ? `${c.body.slice(0, 80)}\u2026`
+                        : c.body}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <CommentThread
+              projectId={project.id}
+              targetType="project"
+              targetId={null}
+              comments={projectComments}
+              canModerate={project.role !== "viewer"}
+              placeholder="Write to everyone on the project"
+              compact
+            />
+          </section>
           {ready.length > 0 && (
             <nav aria-label="Next steps" className="card divide-line divide-y">
               <p className="eyebrow px-4 pt-4 pb-2">Next steps</p>
@@ -216,6 +271,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
           )}
 
           <form
+            data-edit
             action={setShareSamples.bind(
               null,
               project.id,
@@ -239,27 +295,29 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
             </button>
           </form>
 
-          <div className="card-muted flex flex-col gap-2 p-4">
-            <h2 className="text-sm font-semibold">Delete project</h2>
-            <p className="text-muted text-xs">
-              Removes every dataset, upload, profile, query log and AI call log
-              in this project.
-            </p>
-            <ConfirmDialog
-              triggerLabel="Delete project"
-              triggerClassName="btn btn-sm btn-danger self-start"
-              title={`Delete the project “${project.title}”?`}
-              confirmLabel="Delete project"
-              action={deleteProject.bind(null, project.id)}
-            >
-              <p>
-                This permanently removes all {datasets.length} dataset
-                {datasets.length === 1 ? "" : "s"}, uploaded files, profiles,
-                descriptions, query logs and AI call logs in this project.
+          {project.role === "owner" && (
+            <div className="card-muted flex flex-col gap-2 p-4">
+              <h2 className="text-sm font-semibold">Delete project</h2>
+              <p className="text-muted text-xs">
+                Removes every dataset, upload, profile, query log and AI call
+                log in this project.
               </p>
-              <p className="mt-2 font-medium">This cannot be undone.</p>
-            </ConfirmDialog>
-          </div>
+              <ConfirmDialog
+                triggerLabel="Delete project"
+                triggerClassName="btn btn-sm btn-danger self-start"
+                title={`Delete the project “${project.title}”?`}
+                confirmLabel="Delete project"
+                action={deleteProject.bind(null, project.id)}
+              >
+                <p>
+                  This permanently removes all {datasets.length} dataset
+                  {datasets.length === 1 ? "" : "s"}, uploaded files, profiles,
+                  descriptions, query logs and AI call logs in this project.
+                </p>
+                <p className="mt-2 font-medium">This cannot be undone.</p>
+              </ConfirmDialog>
+            </div>
+          )}
         </aside>
       </div>
     </div>

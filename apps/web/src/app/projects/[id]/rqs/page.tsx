@@ -9,7 +9,12 @@ import { AddQuestionForm } from "@/components/rq/add-question-form";
 import { RQCard } from "@/components/rq/rq-card";
 import { ApiError, apiFetch } from "@/lib/api";
 import { addQuestion, addSuggestion, requestSuggestions } from "./actions";
-import type { Dataset, Project, ResearchQuestions } from "@/lib/types";
+import type {
+  Dataset,
+  Project,
+  ProjectComment,
+  ResearchQuestions,
+} from "@/lib/types";
 
 export default async function ResearchQuestionsPage(
   props: PageProps<"/projects/[id]/rqs">,
@@ -21,11 +26,13 @@ export default async function ResearchQuestionsPage(
   let project: Project;
   let data: ResearchQuestions;
   let datasets: Dataset[];
+  let comments: ProjectComment[];
   try {
-    [project, data, datasets] = await Promise.all([
+    [project, data, datasets, comments] = await Promise.all([
       apiFetch<Project>(`/projects/${id}`),
       apiFetch<ResearchQuestions>(`/projects/${id}/rqs`),
       apiFetch<Dataset[]>(`/projects/${id}/datasets`),
+      apiFetch<ProjectComment[]>(`/projects/${id}/comments?target_type=rq`),
     ]);
   } catch (e) {
     if (e instanceof ApiError && (e.status === 404 || e.status === 422))
@@ -85,6 +92,8 @@ export default async function ResearchQuestionsPage(
                 projectId={project.id}
                 rq={q}
                 columns={data.columns}
+                comments={comments.filter((c) => c.target_id === q.id)}
+                canModerate={project.role !== "viewer"}
               />
             ))}
           </section>
@@ -124,7 +133,7 @@ export default async function ResearchQuestionsPage(
                 Questions the data could answer
               </h3>
             </div>
-            <form action={requestSuggestions.bind(null, project.id)}>
+            <form data-edit action={requestSuggestions.bind(null, project.id)}>
               <button
                 disabled={data.suggestions_status === "running"}
                 className="btn btn-secondary btn-sm"

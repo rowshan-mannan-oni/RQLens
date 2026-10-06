@@ -43,7 +43,7 @@ export function DictionaryUpload({
   }
 
   return (
-    <div className="card flex flex-col gap-2 p-3">
+    <div data-edit className="card flex flex-col gap-2 p-3">
       <label htmlFor="dictionary" className="text-sm font-medium">
         Data dictionary (optional)
       </label>

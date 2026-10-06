@@ -1,6 +1,6 @@
 # RQ Lens: progress checklist
 
-Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (Phase 7).
+Status of the work in [plan.md](plan.md), item by item. Last updated: 2026-10-06 (practical additions after Phase 7).
 
 Legend: `[x]` done and verified · `[~]` partly done (see note) · `[ ]` not started
 
@@ -237,6 +237,14 @@ A second module in each project, on the new **Literature** tab: papers become a 
 - Benchmark D runs end to end (oracle).
 - **Not yet run with a real model**, and not yet timed on 20 real papers.
 
+## Practical additions (after Phase 7)
+
+- [x] **Data formats:** Excel (.xlsx), SPSS (.sav, .zsav, .por), Stata (.dta) and Parquet, besides CSV. SPSS/Stata variable labels fill the data dictionary; value labels and user-defined missing values are handled (see `DECISIONS.md`). Tested on SPSS and Stata fixtures, a generated workbook and Parquet, and through the real upload pipeline.
+- [x] **OCR for scanned papers** (RapidOCR, pip-only): scanned pages are read automatically, with positions, so citations still highlight the line. Tested on generated scans: title, authors, sections and sentences come out right. About 4-6 s per page on CPU. Production image installs the `ocr` extra.
+- [x] **Reference import:** BibTeX and RIS (Zotero, Mendeley, EndNote). Matches by DOI or title, fills metadata and citation keys (used by the BibTeX export), and matches PDFs uploaded later. Lists the file names of entries still waiting for a PDF.
+- [x] **Sharing and comments:** viewers and editors by email, role-based access on every route, "Shared with you" projects, a People/Share dialog, comment threads on the project, research questions and literature cells, with resolve. Viewers do not see edit controls. 27 access checks run against the real API (`tests/integration/test_sharing_api.py`, needs a running API); browser-checked as owner and viewer.
+- [ ] No email notifications for invitations or comments (no email service).
+
 ## Extra features (added on request)
 
 - [x] **Multi-file upload:** select several CSVs at once; each uploads with its own progress and errors.
@@ -248,7 +256,7 @@ A second module in each project, on the new **Literature** tab: papers become a 
 
 | Level | Status |
 |---|---|
-| Unit | ✅ 264 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects, PDF parsing (generated papers), citation check, extraction with retry (scripted model), exports, RQ linking, benchmark D oracle |
+| Unit | ✅ 275 tests: loader, profiler, statistics, SQL guard, PII and masking, dictionary, describer, combine and compare, agent tools and loop (scripted model), grounding, column retrieval, eval scoring, Benjamini-Hochberg, RQ verdict rules, feasibility checks on real datasets, mapping validation, RQ pipeline (scripted model), insight planning, ranking, correction, confounders, planted effects, PDF parsing (generated papers), citation check, extraction with retry (scripted model), exports, RQ linking, benchmark D oracle |
 | Integration | ⚠️ The oracle eval test runs the real loader, profiler, agent loop, guard and executor on real datasets. The full API (Postgres, Redis, worker, streaming chat) was checked with a manual script, not an automated test |
 | Security | ⚠️ Malicious SQL tested; prompt injection through column names and cell values, and oversized uploads, not yet tested |
 | End to end (Playwright) | ⚠️ The RQ Fit page was driven with Playwright by hand (load, edit mapping, save, rejected filter); no automated suite yet |

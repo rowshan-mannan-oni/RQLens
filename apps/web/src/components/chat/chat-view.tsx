@@ -176,6 +176,7 @@ export function ChatView({
       )}
 
       <form
+        data-edit
         className="border-line bg-surface/95 sticky bottom-0 -mx-5 -mb-5 border-t px-5 py-4 backdrop-blur"
         onSubmit={(e) => {
           e.preventDefault();

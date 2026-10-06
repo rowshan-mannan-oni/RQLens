@@ -114,7 +114,7 @@ export default async function LiteraturePage(
       </div>
 
       <aside className="flex flex-col gap-4">
-        <div className="card flex flex-col gap-3 p-5">
+        <div data-edit className="card flex flex-col gap-3 p-5">
           <h3 className="font-semibold">New table</h3>
           <NewTableForm
             projectId={projectId}

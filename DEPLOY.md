@@ -45,6 +45,12 @@ rq-lens.example.org {
 
 With nginx, set `client_max_body_size 500m;` and `proxy_read_timeout 300s;`. Chat answers stream over server-sent events, so also set `proxy_buffering off;` for `/api/`.
 
+## Optional features in the image
+
+The production image installs the `sentry` and `ocr` extras. OCR (RapidOCR) adds about 60 MB and reads scanned papers at a few seconds per page on CPU; set `OCR_ENABLED=false` in `.env.prod` to turn it off, or `MAX_OCR_PAGES` to cap the work per paper.
+
+Sharing sends no email: owners copy the project link from the Share dialog.
+
 ## Health checks
 
 | Service | Check |

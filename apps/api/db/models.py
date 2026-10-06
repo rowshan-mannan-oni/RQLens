@@ -72,6 +72,36 @@ class Project(TimestampMixin, Base):
     share_samples: Mapped[bool] = mapped_column(default=True, server_default="true")
 
 
+class ProjectMember(TimestampMixin, Base):
+    """Someone the owner shared the project with. Matched by email when they sign in."""
+
+    __tablename__ = "project_members"
+    __table_args__ = (UniqueConstraint("project_id", "email"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = fk("projects.id")
+    email: Mapped[str] = mapped_column(String(320))
+    role: Mapped[str] = mapped_column(String(16))  # viewer | editor
+    user_id: Mapped[int | None] = fk("users.id", nullable=True, on_delete="SET NULL")
+    invited_by: Mapped[int | None] = fk("users.id", nullable=True, on_delete="SET NULL")
+
+
+class Comment(TimestampMixin, Base):
+    """A comment on the project or on one of its items (a research question, a literature
+    table cell, an insight, a dataset or a paper)."""
+
+    __tablename__ = "comments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    project_id: Mapped[int] = fk("projects.id")
+    user_id: Mapped[int | None] = fk("users.id", nullable=True, on_delete="SET NULL")
+    target_type: Mapped[str] = mapped_column(String(24))  # project | rq | cell | insight | ...
+    target_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    body: Mapped[str] = mapped_column(Text)
+    resolved: Mapped[bool] = mapped_column(default=False, server_default="false")
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ResearchQuestion(TimestampMixin, Base):
     __tablename__ = "research_questions"
 

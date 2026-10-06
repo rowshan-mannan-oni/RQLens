@@ -31,6 +31,7 @@ export function ConfirmDialog({
     <>
       <button
         type="button"
+        data-edit
         onClick={(e) => {
           e.stopPropagation();
           dialog.current?.showModal();

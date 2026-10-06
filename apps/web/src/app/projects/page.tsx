@@ -74,22 +74,28 @@ export default async function ProjectsPage() {
               <span className="bg-surface-3 text-muted grid h-8 w-8 shrink-0 place-items-center rounded-lg">
                 <FolderOpen className="h-4 w-4" aria-hidden />
               </span>
-              <div className="relative z-10 opacity-100 transition sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
-                <ConfirmDialog
-                  triggerLabel="Delete"
-                  triggerClassName="btn btn-sm btn-ghost"
-                  title={`Delete the project “${p.title}”?`}
-                  confirmLabel="Delete project"
-                  action={deleteProject.bind(null, p.id)}
-                >
-                  <p>
-                    This permanently removes all datasets, uploaded files,
-                    profiles, descriptions, query logs and AI call logs in this
-                    project.
-                  </p>
-                  <p className="mt-2 font-medium">This cannot be undone.</p>
-                </ConfirmDialog>
-              </div>
+              {p.role !== "owner" ? (
+                <span className="badge badge-brand relative z-10">
+                  Shared by {p.owner} · {p.role}
+                </span>
+              ) : (
+                <div className="relative z-10 opacity-100 transition sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+                  <ConfirmDialog
+                    triggerLabel="Delete"
+                    triggerClassName="btn btn-sm btn-ghost"
+                    title={`Delete the project “${p.title}”?`}
+                    confirmLabel="Delete project"
+                    action={deleteProject.bind(null, p.id)}
+                  >
+                    <p>
+                      This permanently removes all datasets, uploaded files,
+                      profiles, descriptions, query logs and AI call logs in
+                      this project.
+                    </p>
+                    <p className="mt-2 font-medium">This cannot be undone.</p>
+                  </ConfirmDialog>
+                </div>
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="truncate font-semibold tracking-tight">

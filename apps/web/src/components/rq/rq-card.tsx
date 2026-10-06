@@ -16,7 +16,9 @@ import type {
   ResearchQuestion,
   RuleLevel,
   Verdict,
+  ProjectComment,
 } from "@/lib/types";
+import { CommentsToggle } from "@/components/sharing/comments-toggle";
 
 const VERDICT: Record<
   Verdict,
@@ -58,15 +60,20 @@ export function RQCard({
   projectId,
   rq,
   columns,
+  comments,
+  canModerate,
 }: {
   projectId: number;
   rq: ResearchQuestion;
   columns: ColumnOption[];
+  comments: ProjectComment[];
+  canModerate: boolean;
 }) {
   const a = rq.assessment;
   const working = rq.status === "queued" || rq.status === "running";
   return (
     <article
+      id={`rq-${rq.id}`}
       className={`card relative flex flex-col gap-5 overflow-hidden p-5 pl-6 before:absolute before:inset-y-0 before:left-0 before:w-1 ${
         a && !working ? VERDICT[a.verdict].accent : "before:bg-line-strong"
       }`}
@@ -118,13 +125,13 @@ export function RQCard({
       {a && <EvidenceSection a={a} />}
 
       <footer className="border-line bg-surface-2 -mx-5 -mb-5 -ml-6 flex flex-wrap items-center gap-2 border-t px-5 py-3 pl-6 text-xs">
-        <form action={reassess.bind(null, projectId, rq.id, false)}>
+        <form data-edit action={reassess.bind(null, projectId, rq.id, false)}>
           <button disabled={working} className="btn btn-secondary btn-sm">
             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
             Re-assess
           </button>
         </form>
-        <form action={reassess.bind(null, projectId, rq.id, true)}>
+        <form data-edit action={reassess.bind(null, projectId, rq.id, true)}>
           <button
             disabled={working}
             title="Ask the AI to map the question to columns again"
@@ -142,6 +149,12 @@ export function RQCard({
         >
           <p>Its assessments are deleted too. This cannot be undone.</p>
         </ConfirmDialog>
+        <CommentsToggle
+          projectId={projectId}
+          rqId={rq.id}
+          comments={comments}
+          canModerate={canModerate}
+        />
         {a && (
           <span className="text-subtle ml-auto" title={a.config_version}>
             Assessed {new Date(a.created_at).toLocaleString()}

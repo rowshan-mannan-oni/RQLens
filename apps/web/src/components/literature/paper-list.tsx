@@ -118,7 +118,7 @@ function PaperRow({
         )}
         {status.label}
       </span>
-      <div className="flex shrink-0 items-center gap-1">
+      <div data-edit className="flex shrink-0 items-center gap-1">
         {p.status === "ready" && (
           <MetadataDialog projectId={projectId} paper={p} />
         )}

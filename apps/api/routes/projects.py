@@ -9,9 +9,17 @@ from sqlalchemy import select
 
 from api import samples
 from api.auth import CurrentUser
-from api.db.models import Dataset, Project, ResearchQuestion
+from api.db.models import Dataset, Project, ProjectMember, ResearchQuestion, User
 from api.limits import enforce_project_limit
-from api.routes.deps import PROCESSING, OwnedProject, Queue, Session, duckdb_lock
+from api.routes.deps import (
+    PROCESSING,
+    OwnedProject,
+    OwnerProject,
+    Queue,
+    Session,
+    duckdb_lock,
+    project_role,
+)
 from api.storage import project_dir, upload_path
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -31,6 +39,8 @@ class ProjectOut(BaseModel):
     status: str
     share_samples: bool
     created_at: datetime
+    role: str = "owner"  # owner | editor | viewer, for the signed-in user
+    owner: str | None = None  # owner's name or email, on shared projects
 
 
 class ProjectUpdate(BaseModel):
@@ -41,10 +51,23 @@ class ProjectUpdate(BaseModel):
 
 @router.get("")
 async def list_projects(user: CurrentUser, session: Session) -> list[ProjectOut]:
-    rows = await session.scalars(
+    """The user's own projects, then projects shared with them."""
+    own = await session.scalars(
         select(Project).where(Project.user_id == user.id).order_by(Project.created_at.desc())
     )
-    return [ProjectOut.model_validate(p) for p in rows]
+    out = [ProjectOut.model_validate(p) for p in own]
+    shared = await session.execute(
+        select(Project, ProjectMember.role, User)
+        .join(ProjectMember, ProjectMember.project_id == Project.id)
+        .join(User, User.id == Project.user_id)
+        .where(ProjectMember.email == user.email)
+        .order_by(Project.created_at.desc())
+    )
+    for project, role, owner in shared:
+        item = ProjectOut.model_validate(project)
+        item.role, item.owner = role, owner.name or owner.email
+        out.append(item)
+    return out
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -96,8 +119,13 @@ async def create_sample_project(user: CurrentUser, session: Session, queue: Queu
 
 
 @router.get("/{project_id}")
-async def get_project(project: OwnedProject) -> ProjectOut:
-    return ProjectOut.model_validate(project)
+async def get_project(project: OwnedProject, user: CurrentUser, session: Session) -> ProjectOut:
+    out = ProjectOut.model_validate(project)
+    out.role = await project_role(session, project, user) or "viewer"
+    if out.role != "owner":
+        owner = await session.get(User, project.user_id)
+        out.owner = (owner.name or owner.email) if owner else None
+    return out
 
 
 @router.patch("/{project_id}")
@@ -114,7 +142,7 @@ async def update_project(
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_project(project: OwnedProject, session: Session, queue: Queue) -> None:
+async def delete_project(project: OwnerProject, session: Session, queue: Queue) -> None:
     """Delete a project with all its data: DuckDB file, uploads, profiles, queries and traces."""
     processing = await session.scalar(
         select(Dataset.id).where(Dataset.project_id == project.id, Dataset.status.in_(PROCESSING))

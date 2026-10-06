@@ -43,7 +43,7 @@ export function ReferenceImport({
   }
 
   return (
-    <div className="card flex flex-col gap-3 p-5">
+    <div data-edit className="card flex flex-col gap-3 p-5">
       <h3 className="flex items-center gap-2 font-semibold">
         <BookMarked className="text-brand h-4 w-4" aria-hidden />
         Reference library

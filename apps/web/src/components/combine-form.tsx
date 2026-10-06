@@ -61,7 +61,7 @@ export function CombineForm({
       : `${label(left).replace(/\.(csv|tsv|txt|xlsx|xlsm|sav|zsav|por|dta|parquet|pq)$/i, "")} + ${label(right).replace(/\.(csv|tsv|txt|xlsx|xlsm|sav|zsav|por|dta|parquet|pq)$/i, "")}`;
 
   return (
-    <form action={action} className="card flex flex-col gap-4 p-4">
+    <form data-edit action={action} className="card flex flex-col gap-4 p-4">
       <div>
         <h2 className="section-title">Combine into a new dataset</h2>
         <p className="text-subtle text-sm">

@@ -113,7 +113,7 @@ export function UploadForm({ projectId }: { projectId: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div data-edit className="flex flex-col gap-3">
       <label
         htmlFor="csv-upload"
         onDragOver={(e) => {

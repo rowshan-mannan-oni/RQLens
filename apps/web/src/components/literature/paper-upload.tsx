@@ -153,7 +153,7 @@ export function PaperUpload({ projectId }: { projectId: number }) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div data-edit className="flex flex-col gap-3">
       <div
         onDragOver={(e) => {
           e.preventDefault();
