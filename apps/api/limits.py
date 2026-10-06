@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import get_settings
-from api.db.models import Dataset, LLMCall, Project
+from api.db.models import Dataset, LLMCall, Paper, Project
 from api.routes.deps import OwnedProject, Session
 
 
@@ -103,6 +103,17 @@ async def enforce_project_limit(session: AsyncSession, user_id: int) -> None:
             status.HTTP_409_CONFLICT,
             f"You have reached the limit of {limit} project{'s' if limit != 1 else ''}. "
             "Delete one to create another.",
+        )
+
+
+async def enforce_paper_limit(session: AsyncSession, project_id: int) -> None:
+    limit = get_settings().max_papers_per_project
+    n = await session.scalar(select(func.count(Paper.id)).where(Paper.project_id == project_id))
+    if limit and (n or 0) >= limit:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"This project has reached the limit of {limit} paper{'s' if limit != 1 else ''}. "
+            "Delete one to add another.",
         )
 
 
