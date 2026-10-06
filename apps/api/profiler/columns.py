@@ -265,8 +265,10 @@ def _categories(
     top = [
         {"value": v, "count": n, "share": n / non_null}
         for v, n in con.execute(
-            f"SELECT {c}::VARCHAR AS v, count(*) AS n FROM {t} WHERE {c} IS NOT NULL "
-            f"GROUP BY v ORDER BY n DESC, v LIMIT {TOP_VALUES}"
+            # The subquery exposes only `v`, so a data column named v or n cannot shadow
+            # the aliases in GROUP BY / ORDER BY.
+            f"SELECT v, count(*) AS n FROM (SELECT {c}::VARCHAR AS v FROM {t} "
+            f"WHERE {c} IS NOT NULL) GROUP BY v ORDER BY n DESC, v LIMIT {TOP_VALUES}"
         ).fetchall()
     ]
     rare, largest, smallest = _one(
@@ -390,8 +392,9 @@ def _period_counts(
     rows = con.execute(
         f"""
         WITH counts AS (
-            SELECT date_trunc('{period}', {c})::DATE AS p, count(*) AS n
-            FROM {t} WHERE {c} IS NOT NULL GROUP BY p
+            SELECT p, count(*) AS n FROM (
+                SELECT date_trunc('{period}', {c})::DATE AS p FROM {t} WHERE {c} IS NOT NULL
+            ) GROUP BY p
         ),
         bounds AS (SELECT min(p) AS lo, max(p) AS hi FROM counts)
         SELECT s.p::DATE AS p, coalesce(counts.n, 0)

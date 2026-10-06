@@ -2,7 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { deleteDataset } from "@/app/projects/[id]/actions";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ColumnsTable } from "@/components/profile/columns-table";
+import { DictionaryUpload } from "@/components/profile/dictionary-upload";
 import {
   Associations,
   MissingPatterns,
@@ -15,6 +19,8 @@ import {
 import { ApiError, apiFetch } from "@/lib/api";
 import { formatInt, formatPct } from "@/lib/format";
 import type { DatasetProfile } from "@/lib/types";
+
+import { redescribe } from "./actions";
 
 export default async function DatasetProfilePage(
   props: PageProps<"/projects/[id]/datasets/[datasetId]">,
@@ -54,6 +60,13 @@ export default async function DatasetProfilePage(
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 py-10">
+      <AutoRefresh
+        active={
+          dataset.describe_status === "pending" ||
+          dataset.describe_status === "running"
+        }
+        ms={3000}
+      />
       <div>
         <Link
           href={`/projects/${id}`}
@@ -61,12 +74,34 @@ export default async function DatasetProfilePage(
         >
           ← Project
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {dataset.original_filename}
-        </h1>
+        <div className="mt-2 flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {dataset.original_filename}
+          </h1>
+          {dataset.status === "ready" || dataset.status === "failed" ? (
+            <ConfirmDialog
+              triggerLabel="Delete dataset"
+              title={`Delete ${dataset.original_filename}?`}
+              confirmLabel="Delete dataset"
+              action={deleteDataset.bind(
+                null,
+                Number(id),
+                Number(datasetId),
+                true,
+              )}
+            >
+              <p>
+                This removes the table, its profile, column descriptions and
+                detected links. Combined datasets built from it are kept.
+              </p>
+              <p className="mt-2 font-medium">This cannot be undone.</p>
+            </ConfirmDialog>
+          ) : null}
+        </div>
         <p className="text-sm text-zinc-500">
           Profile of table <code>{dataset.table_name}</code>. Every number on
-          this page comes from a SQL query over the full dataset.
+          this page comes from a SQL query over the data; associations use a
+          fixed sample on large tables.
         </p>
       </div>
 
@@ -149,10 +184,60 @@ export default async function DatasetProfilePage(
                 (click a row for details; click a header to sort)
               </span>
             </h2>
-            <ColumnsTable columns={columns} warnings={warnings} />
+            <DescribeStatus
+              status={dataset.describe_status}
+              error={dataset.describe_error}
+              retry={redescribe.bind(null, Number(id), Number(datasetId))}
+            />
+            <DictionaryUpload
+              projectId={Number(id)}
+              datasetId={Number(datasetId)}
+            />
+            <ColumnsTable
+              columns={columns}
+              warnings={warnings}
+              projectId={Number(id)}
+              datasetId={Number(datasetId)}
+            />
           </section>
         </>
       )}
     </main>
   );
+}
+
+function DescribeStatus({
+  status,
+  error,
+  retry,
+}: {
+  status: string | null;
+  error: string | null;
+  retry: () => Promise<void>;
+}) {
+  if (status === "pending" || status === "running") {
+    return (
+      <p className="animate-pulse text-sm text-zinc-600 dark:text-zinc-400">
+        Writing column descriptions with AI…
+      </p>
+    );
+  }
+  if (status === "failed" || status === "skipped") {
+    return (
+      <form
+        action={retry}
+        className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+      >
+        <span>
+          <span aria-hidden>⚠ </span>
+          AI descriptions {status === "failed" ? "failed" : "were skipped"}
+          {error ? `: ${error.slice(0, 200)}` : "."}
+        </span>
+        <button className="rounded-md border border-amber-300 px-2 py-1 text-xs font-medium hover:bg-amber-100 dark:border-amber-800 dark:hover:bg-amber-900/40">
+          Try again
+        </button>
+      </form>
+    );
+  }
+  return null;
 }

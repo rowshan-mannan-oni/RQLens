@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from arq import ArqRedis
 from fastapi import Depends, HTTPException, Request, status
@@ -28,3 +28,11 @@ def get_queue(request: Request) -> ArqRedis:
 
 
 Queue = Annotated[ArqRedis, Depends(get_queue)]
+
+# A dataset in one of these states is being written by the worker.
+PROCESSING = ("queued", "loading", "profiling")
+
+
+def duckdb_lock(queue: ArqRedis, project_id: int, wait_s: float = 30) -> Any:
+    """The per-project lock the worker holds while it writes the project's DuckDB file."""
+    return queue.lock(f"rqlens:duckdb:{project_id}", timeout=300, blocking_timeout=wait_s)

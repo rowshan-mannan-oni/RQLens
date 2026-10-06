@@ -1,12 +1,16 @@
+import asyncio
+import shutil
 from datetime import datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from redis.exceptions import LockError
 from sqlalchemy import select
 
 from api.auth import CurrentUser
-from api.db.models import Project
-from api.routes.deps import OwnedProject, Session
+from api.db.models import Dataset, Project
+from api.routes.deps import PROCESSING, OwnedProject, Queue, Session, duckdb_lock
+from api.storage import project_dir
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -23,7 +27,14 @@ class ProjectOut(BaseModel):
     title: str
     topic: str | None
     status: str
+    share_samples: bool
     created_at: datetime
+
+
+class ProjectUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    topic: str | None = Field(default=None, max_length=5000)
+    share_samples: bool | None = None
 
 
 @router.get("")
@@ -46,3 +57,38 @@ async def create_project(body: ProjectCreate, user: CurrentUser, session: Sessio
 @router.get("/{project_id}")
 async def get_project(project: OwnedProject) -> ProjectOut:
     return ProjectOut.model_validate(project)
+
+
+@router.patch("/{project_id}")
+async def update_project(
+    body: ProjectUpdate, project: OwnedProject, session: Session
+) -> ProjectOut:
+    for field, value in body.model_dump(exclude_unset=True).items():
+        if value is None and field != "topic":
+            continue
+        setattr(project, field, value.strip() if isinstance(value, str) else value)
+    await session.commit()
+    await session.refresh(project)
+    return ProjectOut.model_validate(project)
+
+
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project(project: OwnedProject, session: Session, queue: Queue) -> None:
+    """Delete a project with all its data: DuckDB file, uploads, profiles, queries and traces."""
+    processing = await session.scalar(
+        select(Dataset.id).where(Dataset.project_id == project.id, Dataset.status.in_(PROCESSING))
+    )
+    if processing is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "A dataset is still processing; delete the project after it"
+        )
+    try:
+        async with duckdb_lock(queue, project.id):
+            await asyncio.to_thread(shutil.rmtree, project_dir(project.id), ignore_errors=True)
+    except LockError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "The project is busy; try again shortly"
+        ) from exc
+    # Datasets, queries, LLM call logs and everything else are removed by ON DELETE CASCADE.
+    await session.delete(project)
+    await session.commit()

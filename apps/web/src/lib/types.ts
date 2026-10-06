@@ -5,6 +5,7 @@ export type Project = {
   title: string;
   topic: string | null;
   status: string;
+  share_samples: boolean;
   created_at: string;
 };
 
@@ -20,6 +21,14 @@ export type Dataset = {
   row_count: number | null;
   column_count: number | null;
   size_bytes: number;
+  describe_status: string | null;
+  describe_error: string | null;
+  kind: "upload" | "combined";
+  source_json: {
+    mode: "stack" | "join";
+    labels?: string[];
+    how?: "left" | "inner";
+  } | null;
   created_at: string;
 };
 
@@ -89,6 +98,11 @@ export type Column = {
   original_name: string | null;
   physical_type: string;
   semantic_type: string | null;
+  description: string | null;
+  description_source: "llm" | "user" | "dictionary" | null;
+  description_confidence: "high" | "medium" | "low" | null;
+  is_pii: boolean;
+  pii_reason: string | null;
   profile_json: ColumnProfile | null;
 };
 
@@ -139,6 +153,42 @@ export type TableRelationships = {
     dependencies: MissingDependency[];
   };
   truncated: Record<string, number>;
+};
+
+export type ComparisonCell = {
+  name: string;
+  original_name: string;
+  physical_type: string;
+  semantic_type: string;
+  kind: string | null;
+  missing_pct: number | null;
+  distinct: number | null;
+  median: number | null;
+};
+
+export type Comparison = {
+  tables: {
+    dataset_id: number;
+    label: string;
+    row_count: number;
+    column_count: number;
+  }[];
+  columns: {
+    key: string;
+    label: string;
+    in_all: boolean;
+    cells: Record<string, ComparisonCell>;
+    issues: string[];
+  }[];
+  issues: { code: string; column: string; message: string }[];
+  shared_columns: number;
+  total_columns: number;
+  stackable: boolean;
+};
+
+export type CompareResponse = {
+  comparison: Comparison;
+  links: Relationship[];
 };
 
 export type RelationshipSide = {

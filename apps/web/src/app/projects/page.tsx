@@ -2,9 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/auth";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { apiFetch } from "@/lib/api";
 import type { Project } from "@/lib/types";
 
+import { deleteProject } from "./[id]/actions";
 import { createProject } from "./actions";
 
 const input =
@@ -63,22 +65,40 @@ export default async function ProjectsPage() {
       ) : (
         <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
           {projects.map((p) => (
-            <li key={p.id} className="py-3">
-              <Link
-                href={`/projects/${p.id}`}
-                className="font-medium hover:underline"
-              >
-                {p.title}
-              </Link>
-              {p.topic && (
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  {p.topic}
+            <li
+              key={p.id}
+              className="flex items-start justify-between gap-4 py-3"
+            >
+              <div className="min-w-0">
+                <Link
+                  href={`/projects/${p.id}`}
+                  className="font-medium hover:underline"
+                >
+                  {p.title}
+                </Link>
+                {p.topic && (
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    {p.topic}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-zinc-500">
+                  {p.status} · created{" "}
+                  {new Date(p.created_at).toLocaleDateString()}
                 </p>
-              )}
-              <p className="mt-1 text-xs text-zinc-500">
-                {p.status} · created{" "}
-                {new Date(p.created_at).toLocaleDateString()}
-              </p>
+              </div>
+              <ConfirmDialog
+                triggerLabel="Delete"
+                title={`Delete the project “${p.title}”?`}
+                confirmLabel="Delete project"
+                action={deleteProject.bind(null, p.id)}
+              >
+                <p>
+                  This permanently removes all datasets, uploaded files,
+                  profiles, descriptions, query logs and AI call logs in this
+                  project.
+                </p>
+                <p className="mt-2 font-medium">This cannot be undone.</p>
+              </ConfirmDialog>
             </li>
           ))}
         </ul>

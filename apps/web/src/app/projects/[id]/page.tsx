@@ -3,23 +3,13 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { DatasetList } from "@/components/dataset-list";
 import { UploadForm } from "@/components/upload-form";
 import { ApiError, apiFetch } from "@/lib/api";
-import { formatBytes, formatInt, formatPct } from "@/lib/format";
-import type {
-  Dataset,
-  DatasetStatus,
-  Project,
-  Relationship,
-} from "@/lib/types";
-
-const STATUS_LABEL: Record<DatasetStatus, string> = {
-  queued: "Queued",
-  loading: "Loading",
-  profiling: "Profiling",
-  ready: "Ready",
-  failed: "Failed",
-};
+import { formatInt, formatPct } from "@/lib/format";
+import { deleteProject, setShareSamples } from "./actions";
+import type { Dataset, Project, Relationship } from "@/lib/types";
 
 export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
   const session = await auth();
@@ -54,15 +44,50 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
         >
           ← Projects
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">
-          {project.title}
-        </h1>
+        <div className="mt-2 flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {project.title}
+          </h1>
+          <ConfirmDialog
+            triggerLabel="Delete project"
+            title={`Delete the project “${project.title}”?`}
+            confirmLabel="Delete project"
+            action={deleteProject.bind(null, project.id)}
+          >
+            <p>
+              This permanently removes all {datasets.length} dataset
+              {datasets.length === 1 ? "" : "s"}, uploaded files, profiles,
+              descriptions, query logs and AI call logs in this project.
+            </p>
+            <p className="mt-2 font-medium">This cannot be undone.</p>
+          </ConfirmDialog>
+        </div>
         {project.topic && (
           <p className="mt-1 text-zinc-600 dark:text-zinc-400">
             {project.topic}
           </p>
         )}
       </div>
+
+      <form
+        action={setShareSamples.bind(null, project.id, !project.share_samples)}
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-200 p-3 text-sm dark:border-zinc-800"
+      >
+        <p>
+          <span className="font-medium">
+            Sample values {project.share_samples ? "are" : "are not"} shared
+            with the AI.
+          </span>{" "}
+          <span className="text-zinc-600 dark:text-zinc-400">
+            {project.share_samples
+              ? "The AI sees column statistics and a few masked example values, never full rows. Personal-data columns are never shown."
+              : "The AI sees only column names and aggregate statistics."}
+          </span>
+        </p>
+        <button className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
+          {project.share_samples ? "Stop sharing samples" : "Share samples"}
+        </button>
+      </form>
 
       <UploadForm projectId={project.id} />
 
@@ -73,49 +98,7 @@ export default async function ProjectPage(props: PageProps<"/projects/[id]">) {
             No datasets yet. Upload a CSV to profile it.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-            {datasets.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-center justify-between gap-4 p-3"
-              >
-                <div className="min-w-0">
-                  {d.status === "ready" ? (
-                    <Link
-                      href={`/projects/${project.id}/datasets/${d.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {d.original_filename}
-                    </Link>
-                  ) : (
-                    <p className="font-medium">{d.original_filename}</p>
-                  )}
-                  <p className="text-xs text-zinc-500">
-                    table <code>{d.table_name}</code> ·{" "}
-                    {formatBytes(d.size_bytes)}
-                    {d.status === "ready" &&
-                      ` · ${formatInt(d.row_count)} rows × ${formatInt(d.column_count)} columns`}
-                  </p>
-                  {d.status === "failed" && d.error && (
-                    <p className="mt-1 text-xs break-words text-red-600">
-                      {d.error}
-                    </p>
-                  )}
-                </div>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
-                    d.status === "ready"
-                      ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-                      : d.status === "failed"
-                        ? "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200"
-                        : "animate-pulse bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                  }`}
-                >
-                  {STATUS_LABEL[d.status]}
-                </span>
-              </li>
-            ))}
-          </ul>
+          <DatasetList projectId={project.id} datasets={datasets} />
         )}
       </section>
 

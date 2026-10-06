@@ -6,6 +6,7 @@ import { formatInt, formatNum, formatPct } from "@/lib/format";
 import type { Column, ColumnProfile, DataWarning, Severity } from "@/lib/types";
 
 import { Histogram, PeriodChart, TopValuesChart } from "./charts";
+import { DescriptionEditor, DescriptionLabel } from "./description";
 import { SEVERITY_ORDER, SEVERITY_STYLE, SeverityBadge } from "./severity";
 
 type SortKey = "position" | "name" | "type" | "missing" | "distinct" | "issues";
@@ -27,9 +28,13 @@ const SEVERITY_RANK: Record<Severity, number> = {
 export function ColumnsTable({
   columns,
   warnings,
+  projectId,
+  datasetId,
 }: {
   columns: Column[];
   warnings: DataWarning[];
+  projectId: number;
+  datasetId: number;
 }) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
     key: "position",
@@ -114,6 +119,9 @@ export function ColumnsTable({
             {header("position", "#")}
             {header("name", "Column")}
             {header("type", "Type")}
+            <th scope="col" className="px-3 py-2 text-left font-medium">
+              Description
+            </th>
             {header("missing", "Missing", "text-right")}
             {header("distinct", "Distinct", "text-right")}
             {header("issues", "Issues")}
@@ -139,8 +147,19 @@ export function ColumnsTable({
                     <span className="ml-2 font-mono text-xs text-zinc-500">
                       {r.column.physical_type.toLowerCase()}
                     </span>
+                    {r.column.is_pii && (
+                      <span
+                        className="ml-2 rounded-full border border-violet-300 bg-violet-50 px-1.5 py-0.5 text-xs text-violet-900 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-200"
+                        title={r.column.pii_reason ?? undefined}
+                      >
+                        Personal data
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2">{r.column.semantic_type}</td>
+                  <td className="max-w-xs px-3 py-2">
+                    <DescriptionLabel column={r.column} compact />
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {formatPct(r.profile?.missing_pct)}
                   </td>
@@ -159,10 +178,16 @@ export function ColumnsTable({
                 {isOpen && r.profile && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="bg-zinc-50/60 px-3 py-4 dark:bg-zinc-900/40"
                     >
-                      <ColumnDetail profile={r.profile} warnings={r.warnings} />
+                      <ColumnDetail
+                        column={r.column}
+                        profile={r.profile}
+                        warnings={r.warnings}
+                        projectId={projectId}
+                        datasetId={datasetId}
+                      />
                     </td>
                   </tr>
                 )}
@@ -185,11 +210,17 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function ColumnDetail({
+  column,
   profile: p,
   warnings,
+  projectId,
+  datasetId,
 }: {
+  column: Column;
   profile: ColumnProfile;
   warnings: DataWarning[];
+  projectId: number;
+  datasetId: number;
 }) {
   const stats: [string, string][] = [
     ["Rows", formatInt(p.count)],
@@ -250,6 +281,18 @@ function ColumnDetail({
 
   return (
     <div className="flex flex-col gap-4">
+      <DescriptionEditor
+        key={`${column.id}-${column.description ?? ""}`}
+        column={column}
+        projectId={projectId}
+        datasetId={datasetId}
+      />
+      {column.is_pii && (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Treated as personal data ({column.pii_reason}). Its values are never
+          sent to the AI.
+        </p>
+      )}
       {warnings.length > 0 && (
         <ul className="flex flex-col gap-1.5">
           {warnings.map((w, i) => (

@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "numpy>=2.0",
     "scipy>=1.14",
+    "sqlglot>=26.0",
 ]
 
 [project.optional-dependencies]

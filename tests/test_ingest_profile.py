@@ -130,3 +130,18 @@ def test_sanitize_identifier() -> None:
     assert sanitize_identifier("2024 score", taken) == "col_2024_score"
     assert sanitize_identifier("___", taken) == "col"
     assert sanitize_identifier('x"; DROP TABLE t; --', taken) == "x_drop_table_t"
+
+
+def test_columns_named_like_internal_aliases(tmp_path: Path) -> None:
+    # Regression: the profiler groups by aliases such as v, n and p; data columns with those
+    # names must not shadow them.
+    header = "v,n,p,u,x,k,b,r,lo,hi,day"
+    rows = "\n".join(
+        f"{i % 3},{i % 4},{i % 5},{i},{i * 2},{i % 2},{i % 6},{i % 7},{i},{i},"
+        f"2024-01-{1 + i % 28:02d}"
+        for i in range(60)
+    )
+    result = run(tmp_path, f"{header}\n{rows}\n")
+    assert result.table["row_count"] == 60
+    assert col(result, "v")["top_values"][0]["count"] == 20
+    assert sum(p["count"] for p in col(result, "day")["datetime"]["counts"]) == 60

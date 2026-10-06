@@ -10,9 +10,12 @@ from typing import Any
 import duckdb
 
 from api.config import get_settings
+from api.ingest.combine import CombinePlan, run_combine
 from api.ingest.loader import LoadReport, load_csv
+from api.ingest.names import quote
 from api.profiler.joins import JoinTable, find_joins
 from api.profiler.tables import DatasetProfile, profile_table
+from api.semantic.pii import PiiResult, detect
 
 
 def connect(db_path: Path, *, read_only: bool = False) -> duckdb.DuckDBPyConnection:
@@ -32,9 +35,29 @@ def run_load(db_path: Path, csv_path: Path, table_name: str) -> LoadReport:
         return load_csv(con, csv_path, table_name)
 
 
+def run_combine_plan(db_path: Path, table_name: str, plan: CombinePlan) -> LoadReport:
+    with connect(db_path) as con:
+        return run_combine(con, table_name, plan)
+
+
 def run_profile(db_path: Path, report: LoadReport) -> DatasetProfile:
     with connect(db_path) as con:
         return profile_table(con, report)
+
+
+def run_pii(db_path: Path, profile: DatasetProfile, table_name: str) -> dict[str, PiiResult]:
+    with connect(db_path) as con:
+        return {
+            r.column.name: detect(con, table_name, r.column.name, r.column.physical_type, r.profile)
+            for r in profile.columns
+        }
+
+
+def drop_table(db_path: Path, table_name: str) -> None:
+    if not db_path.exists():
+        return
+    with connect(db_path) as con:
+        con.execute(f"DROP TABLE IF EXISTS {quote(table_name)}")
 
 
 def run_joins(db_path: Path, new: JoinTable, others: list[JoinTable]) -> list[dict[str, Any]]:

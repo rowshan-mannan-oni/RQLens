@@ -63,6 +63,8 @@ class Project(TimestampMixin, Base):
     topic: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="new")
     duckdb_path: Mapped[str | None] = mapped_column(String(500))
+    # When false, only aggregate statistics (no sample values) are sent to the LLM.
+    share_samples: Mapped[bool] = mapped_column(default=True, server_default="true")
 
 
 class ResearchQuestion(TimestampMixin, Base):
@@ -89,6 +91,12 @@ class Dataset(TimestampMixin, Base):
     status: Mapped[str] = mapped_column(String(16), default="queued", server_default="queued")
     error: Mapped[str | None] = mapped_column(Text)
     load_warnings_json: Mapped[Json | None]
+    # upload: from a CSV file; combined: built from other datasets (spec in source_json)
+    kind: Mapped[str] = mapped_column(String(16), default="upload", server_default="upload")
+    source_json: Mapped[Json | None]
+    # LLM column descriptions: pending | running | done | failed | skipped
+    describe_status: Mapped[str | None] = mapped_column(String(16))
+    describe_error: Mapped[str | None] = mapped_column(Text)
 
 
 class DatasetColumn(Base):
@@ -102,7 +110,9 @@ class DatasetColumn(Base):
     semantic_type: Mapped[str | None] = mapped_column(String(32))
     description: Mapped[str | None] = mapped_column(Text)
     description_source: Mapped[str | None] = mapped_column(String(16))  # llm | user | dictionary
+    description_confidence: Mapped[str | None] = mapped_column(String(8))  # high | medium | low
     is_pii: Mapped[bool] = mapped_column(default=False)
+    pii_reason: Mapped[str | None] = mapped_column(String(200))
     profile_json: Mapped[Json | None]
 
 

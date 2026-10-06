@@ -46,7 +46,8 @@ services:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     environment: *api-env
     env_file: [{ path: .env, required: false }]
-    command: arq api.worker.WorkerSettings --watch apps/api
+    # watchfiles restarts the whole process; arq --watch keeps old modules loaded.
+    command: watchfiles --filter python "arq api.worker.WorkerSettings" apps/api
     volumes:
       - ./apps/api:/app/apps/api
       - ./data:/data
