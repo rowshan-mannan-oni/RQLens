@@ -2,6 +2,8 @@
 
 **Know what your data can answer before you design the study.**
 
+Documentation reviewed against the repository on **2026-10-07**.
+
 RQ Lens is a companion for researchers working with a tabular dataset. Upload your data (CSV, Excel, SPSS, Stata or Parquet) and write your research questions. RQ Lens profiles every column, tells you whether each question is answerable with this data and why, ranks exploratory findings, and answers questions in plain language. Every number on screen comes from a logged SQL query you can open and rerun.
 
 ![RQ Fit page](docs/rq-fit.png)
@@ -13,6 +15,7 @@ RQ Lens is a companion for researchers working with a tabular dataset. Upload yo
 | Feature | How it works |
 |---|---|
 | **Data files** | CSV, Excel, SPSS (`.sav`, `.zsav`, `.por`), Stata (`.dta`) and Parquet. SPSS and Stata variable labels fill the data dictionary; fully labelled codes become their labels, and user-defined missing values ("9 = Refused") become missing, with a note. |
+| **Compare and combine** | Compare column types, categories, missingness and possible links across datasets. Stack compatible files with a `source_file` column, or join two datasets on a key using a left or inner join. Combined datasets are profiled and can be used for research questions and insights. |
 | **Profiling** | Pure SQL in DuckDB, with no AI involved. It finds types, missing values, distributions, outliers, correlations, missing-data patterns and join keys, plus rule-based warnings for placeholder codes such as `-999`, label leakage, unit changes and near-duplicate columns. |
 | **Research-question fit** | An LLM parses each question and maps its constructs to columns. Guarded SQL checks then measure rows in scope, missing values, group sizes, outcome variation, time coverage and statistical power. **Fixed rules** give the verdict: answerable, partly answerable or not answerable. The LLM only writes the explanation, and every number in it must appear in a query result. |
 | **Insights** | Up to 20 analyses are planned from your questions and the profile, then run with a fixed statistics library (Spearman, Mann-Whitney U, Kruskal-Wallis, chi-square, trend). Results are corrected with Benjamini-Hochberg, ranked by relevance, effect size and support (not p-value), and re-tested within subgroups to catch confounding. |
@@ -26,6 +29,22 @@ RQ Lens is a companion for researchers working with a tabular dataset. Upload yo
 To try it without your own data, click **Try a sample project**. This loads the Palmer penguins data with three research questions, and works without an AI key.
 
 ## Architecture
+
+### Technology stack
+
+| Layer | Technologies |
+|---|---|
+| Web | Next.js 16 App Router, React 19, TypeScript 5, Tailwind CSS 4 |
+| Charts, icons and PDF reader | Recharts, Lucide React, PDF.js |
+| Authentication | Auth.js / NextAuth 5 beta, Google or GitHub OAuth; short-lived JWTs signed with JOSE |
+| API | Python 3.12, FastAPI, Uvicorn, Pydantic 2 |
+| Persistence and jobs | PostgreSQL 16, SQLAlchemy 2, psycopg 3, Alembic; Redis 7 and ARQ |
+| Analysis | DuckDB, NumPy, SciPy, SQLGlot |
+| AI | OpenAI Python SDK over a configurable OpenAI-compatible endpoint; optional embeddings for column retrieval |
+| Documents | PyMuPDF, WeasyPrint, OpenPyXL, pyreadstat; optional RapidOCR and wordninja |
+| Tooling | Docker Compose, pnpm, pytest, Ruff, mypy, ESLint, Prettier, pre-commit, GitHub Actions |
+
+Dependency declarations are in [pyproject.toml](pyproject.toml) and [apps/web/package.json](apps/web/package.json).
 
 ```
 Browser ── Next.js 16 (App Router, Auth.js) ──── signed 5-minute JWT ───┐
@@ -58,25 +77,99 @@ Design rules:
 
 ## Run it locally
 
-You need Docker, Node 24 with pnpm, and Python 3.12.
+Start Docker Desktop (or Docker Engine) first. For the usual development setup, you need Docker Compose v2 and Node.js 24 with the pnpm version declared in `apps/web/package.json`. Python 3.12 is only needed on the host for backend checks or evaluation; the API and worker run in Docker.
 
-```sh
-cp .env.example .env          # set AUTH_SECRET, API_JWT_SECRET, a sign-in provider, LLM_API_KEY
-docker compose up -d          # Postgres, Redis, API (port 8000, runs migrations) and worker
-cd apps/web && pnpm install && pnpm dev   # http://localhost:3000
+### 1. Configure the environment
+
+Copy `.env.example` to `.env` from the repository root. Keep an existing `.env` when restarting the app.
+
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env
 ```
 
-Checks run in CI:
-
 ```sh
-python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy && .venv/bin/pytest
-cd apps/web && pnpm lint && pnpm typecheck && pnpm format:check
+# macOS / Linux
+cp .env.example .env
 ```
 
-To deploy, see [DEPLOY.md](DEPLOY.md). It covers the production Compose file, health checks, error tracking and backups.
+Set these values in `.env`:
+
+| Variable | Purpose |
+|---|---|
+| `AUTH_SECRET` | Random secret for Auth.js sessions |
+| `API_JWT_SECRET` | Separate random secret shared by the web app and API; add this variable to `.env` because the development example does not include it |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth credentials, or use `AUTH_GITHUB_ID` and `AUTH_GITHUB_SECRET` instead |
+| `LLM_API_KEY` | API key for AI features |
+| `LLM_BASE_URL`, `LLM_MODEL` | Optional provider endpoint and model overrides; defaults are defined in `apps/api/config.py` |
+| `LLM_EMBEDDING_MODEL` | Optional embedding model override; set to an empty value to use word matching only |
+
+Generate each secret independently with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`. Register the OAuth callback as `http://localhost:3000/api/auth/callback/google` or `http://localhost:3000/api/auth/callback/github`.
+
+Without an AI key, profiling, comparison, combination, template insights and the sample project's mapped question assessments still work. Chat, new question parsing and literature extraction need a working model. The sample project still requires sign-in.
+
+### 2. Start the services
+
+From the repository root:
+
+```sh
+docker compose up -d --build
+```
+
+This starts PostgreSQL, Redis, the API and the background worker. The API applies database migrations automatically. In a separate terminal, start the frontend:
+
+```sh
+cd apps/web
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+The frontend normally runs on the host because Docker Desktop on Windows does not forward file-change events reliably. To run the frontend in Docker too, use `docker compose --profile docker-web up -d --build` instead of starting `pnpm dev` on the host.
+
+| Address | Purpose |
+|---|---|
+| http://localhost:3000 | App; sign in and choose **Try a sample project** |
+| http://localhost:8000/docs | Interactive API documentation; project endpoints require authentication |
+| http://localhost:8000/health/live | API process health |
+| http://localhost:8000/health/ready | PostgreSQL and Redis readiness |
+
+Check containers with `docker compose ps`. Inspect backend logs with `docker compose logs --tail=100 api worker`. Stop the host frontend with Ctrl+C and stop the containers with `docker compose down`; database volumes and local uploaded data are retained.
+
+### Development checks
+
+The GitHub Actions workflow configures backend linting, formatting, typing and tests, plus frontend linting, formatting, typing and a production build.
+
+For backend checks on Windows:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\ruff.exe format --check .
+.\.venv\Scripts\mypy.exe
+.\.venv\Scripts\pytest.exe
+```
+
+On macOS / Linux:
+
+```sh
+python3.12 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/mypy
+.venv/bin/pytest
+```
+
+WeasyPrint PDF reports need native Pango libraries on the host; the API Dockerfile installs these for container use. Optional OCR dependencies are included in the `dev` extra and can also be installed with `pip install -e ".[ocr]"`.
+
+For frontend checks, run `pnpm lint`, `pnpm format:check`, `pnpm typecheck` and `pnpm build` from `apps/web`.
+
+For production deployment, follow [DEPLOY.md](DEPLOY.md) and `.env.prod.example`. The production Compose stack includes a migration job, health checks, OCR and optional Sentry support, and publishes only the web app.
 
 ## Evaluation
+
+Install the backend development dependencies and activate the Python 3.12 virtual environment first. On macOS / Linux:
 
 ```sh
 PYTHONPATH=apps:. python evals/run_eval.py qa         # chat accuracy (execution match against gold SQL)
@@ -86,9 +179,20 @@ PYTHONPATH=apps:. python evals/run_eval.py insights   # insight generation acros
 PYTHONPATH=apps:. python evals/run_eval.py lit        # literature extraction with citations
 ```
 
+On Windows PowerShell, set the module search path once, then run the same evaluator commands without the inline `PYTHONPATH=apps:.` prefix:
+
+```powershell
+$env:PYTHONPATH = "apps;."
+.\.venv\Scripts\python.exe evals/run_eval.py qa --smoke
+```
+
+See [evals/README.md](evals/README.md) for provider configuration, oracle runs and scoring options.
+
 There are 9 versioned development datasets: survey, software defects, time series, timestamps, a 75-column table, leakage and missingness cases, and a deliberately messy export.
 
 ### Results so far
+
+These are previously reported development results, not fresh benchmark runs from this documentation update. See [PROGRESS.md](PROGRESS.md) for the testing history and remaining work.
 
 | Benchmark | Result | Caveat |
 |---|---|---|
@@ -97,7 +201,7 @@ There are 9 versioned development datasets: survey, software defects, time serie
 | Planted effects | A planted strong effect ranks first; 6 pure-noise pairs come out as "no clear evidence" after correction; a planted Simpson's paradox is caught | Unit tests |
 | Chat accuracy (31 questions) | Harness passes 31 of 31 with a scripted model | **No real-model run yet.** The gold answers have not been checked by hand. |
 | Literature extraction (benchmark D, 5 papers, 65 labelled cells) | Oracle self-test 100% on accuracy, citation precision and recall, and not-found accuracy, including both planted cases | Synthetic papers; **no real-model run yet**. Real papers still need collecting and labelling. |
-| Tests | 264 unit and pipeline tests | |
+| Tests | pytest unit and pipeline suite, plus a separate sharing API integration check | The sharing check needs a running API; collect the suite for the current test count. |
 
 The real-model benchmarks (chat accuracy on 120 to 150 questions, planted-issue detection, verdict agreement on 60 hand-labelled pairs) are Phase 5 in [plan.md](plan.md). They need an API key with enough quota and hand-checked labels.
 
